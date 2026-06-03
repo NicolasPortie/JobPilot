@@ -1,0 +1,75 @@
+{
+  "objectiveKind": "apply",
+  "platform": "Generic",
+  "module": "GenericPlatformModule",
+  "phase": "Form",
+  "planner": "local",
+  "proposal": {
+    "type": "click",
+    "elementId": "submit",
+    "value": "",
+    "label": "Enviar candidatura",
+    "reason": "Click final submit.",
+    "confidence": 0.8,
+    "planner": "local",
+    "expectedEffect": "submit",
+    "requiresCheckpoint": false
+  },
+  "risk": {
+    "level": "High",
+    "reasons": [
+      "submit_boundary",
+      "generic_platform_submit_requires_review",
+      "risk_budget_exceeded:Medium"
+    ],
+    "isSubmitBoundary": true,
+    "requiresCheckpoint": true,
+    "budget": {
+      "maxAutoRisk": "Medium",
+      "allowSubmit": false,
+      "allowSensitiveWithoutSource": false,
+      "allowGenericSubmit": false
+    }
+  },
+  "verdict": {
+    "allowed": false,
+    "verdict": "risk_requires_checkpoint",
+    "reason": "submit_boundary; generic_platform_submit_requires_review; risk_budget_exceeded:Medium",
+    "guardrails": [
+      "target_observed_or_not_required",
+      "action_type_matches_target",
+      "navigation_required_fields_clear"
+    ],
+    "requiresCheckpoint": true
+  },
+  "outcome": {
+    "success": false,
+    "status": "blocked_by_guard",
+    "message": "Submit requires checkpoint on generic platform.",
+    "beforeFingerprint": "before-submit",
+    "afterFingerprint": "before-submit",
+    "stateChanged": false,
+    "failureCode": "risk_requires_checkpoint",
+    "failure": {
+      "code": "risk_requires_checkpoint",
+      "failureClass": "guard",
+      "detail": "Submit requires checkpoint on generic platform.",
+      "retriable": false
+    },
+    "requiresCheckpoint": true
+  },
+  "recovery": {
+    "mode": "Checkpoint",
+    "reason": "Submit requires checkpoint on generic platform.",
+    "continueLoop": false,
+    "suggestedUserAction": "Review the final application before submitting.",
+    "resumeMode": "reobserve"
+  },
+  "contentSafety": {
+    "hasSignals": false,
+    "hasPromptInjectionSignals": false,
+    "riskLevel": "None",
+    "summary": "No suspicious observed content signals.",
+    "signals": []
+  }
+}

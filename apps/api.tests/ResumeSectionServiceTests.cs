@@ -1,0 +1,176 @@
+using JobPilot.Api.Data;
+using JobPilot.Api.Domain;
+using JobPilot.Api.Services;
+using Microsoft.EntityFrameworkCore;
+
+namespace JobPilot.Api.Tests;
+
+public class ResumeSectionServiceTests
+{
+    [Fact]
+    public async Task AddAsync_CriaSecao_E_RebuildaPlainText()
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        var documentId = Guid.NewGuid();
+        var versionId = Guid.NewGuid();
+
+        db.ResumeDocuments.Add(new ResumeDocument { Id = documentId, UserId = userId, Title = "Base" });
+        db.ResumeVersions.Add(new ResumeVersion
+        {
+            Id = versionId,
+            UserId = userId,
+            ResumeDocumentId = documentId,
+            Title = "Base",
+            PlainText = "Texto inicial"
+        });
+        await db.SaveChangesAsync();
+
+        var service = new ResumeSectionService(db);
+        var section = await service.AddAsync(userId, versionId, new CreateResumeSectionRequest("experience", "Experiencia", "[{\"title\":\"Dev\",\"company\":\"Acme\"}]"));
+
+        Assert.Equal("experience", section.SectionType);
+        Assert.Equal("Experiencia", section.Title);
+
+        var version = await db.ResumeVersions.FindAsync(versionId);
+        Assert.NotNull(version);
+        Assert.Contains("EXPERIENCIA", version.PlainText);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_AlteraSecao()
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        var documentId = Guid.NewGuid();
+        var versionId = Guid.NewGuid();
+
+        db.ResumeDocuments.Add(new ResumeDocument { Id = documentId, UserId = userId, Title = "Base" });
+        db.ResumeVersions.Add(new ResumeVersion
+        {
+            Id = versionId,
+            UserId = userId,
+            ResumeDocumentId = documentId,
+            Title = "Base",
+            PlainText = "Texto"
+        });
+        await db.SaveChangesAsync();
+
+        var service = new ResumeSectionService(db);
+        var added = await service.AddAsync(userId, versionId, new CreateResumeSectionRequest("skills", "Competencias", "{\"items\":[\"C#\"]}"));
+        var updated = await service.UpdateAsync(userId, added.Id, new UpdateResumeSectionRequest("Novas Competencias", "{\"items\":[\"C#\",\".NET\"]}", 5));
+
+        Assert.Equal("Novas Competencias", updated.Title);
+        Assert.Equal(5, updated.SortOrder);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_RemoveSecao()
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        var documentId = Guid.NewGuid();
+        var versionId = Guid.NewGuid();
+
+        db.ResumeDocuments.Add(new ResumeDocument { Id = documentId, UserId = userId, Title = "Base" });
+        db.ResumeVersions.Add(new ResumeVersion
+        {
+            Id = versionId,
+            UserId = userId,
+            ResumeDocumentId = documentId,
+            Title = "Base",
+            PlainText = "Texto"
+        });
+        await db.SaveChangesAsync();
+
+        var service = new ResumeSectionService(db);
+        var added = await service.AddAsync(userId, versionId, new CreateResumeSectionRequest("skills", "Competencias", "{\"items\":[\"C#\"]}"));
+        await service.DeleteAsync(userId, added.Id);
+
+        Assert.Empty(await db.ResumeSections.Where(x => x.ResumeVersionId == versionId).ToListAsync());
+    }
+
+    [Fact]
+    public async Task ReorderAsync_ReordenaSecoes_E_RebuildaPlainText()
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        var documentId = Guid.NewGuid();
+        var versionId = Guid.NewGuid();
+
+        db.ResumeDocuments.Add(new ResumeDocument { Id = documentId, UserId = userId, Title = "Base" });
+        db.ResumeVersions.Add(new ResumeVersion
+        {
+            Id = versionId,
+            UserId = userId,
+            ResumeDocumentId = documentId,
+            Title = "Base",
+            PlainText = "Texto"
+        });
+        await db.SaveChangesAsync();
+
+        var service = new ResumeSectionService(db);
+        var first = await service.AddAsync(userId, versionId, new CreateResumeSectionRequest("summary", "Resumo", "{\"text\":\"Resumo profissional\"}"));
+        var second = await service.AddAsync(userId, versionId, new CreateResumeSectionRequest("skills", "Competencias", "{\"items\":[\"C#\"]}"));
+        var third = await service.AddAsync(userId, versionId, new CreateResumeSectionRequest("experience", "Experiencia", "{\"items\":[\"Dev\"]}"));
+
+        var reordered = await service.ReorderAsync(userId, versionId, new ReorderResumeSectionsRequest([third.Id, first.Id, second.Id]));
+
+        Assert.Equal([third.Id, first.Id, second.Id], reordered.Select(x => x.Id).ToArray());
+        Assert.Equal([10, 20, 30], reordered.Select(x => x.SortOrder).ToArray());
+
+        var version = await db.ResumeVersions.SingleAsync(x => x.Id == versionId);
+        Assert.True(version.PlainText.IndexOf("EXPERIENCIA", StringComparison.Ordinal) < version.PlainText.IndexOf("RESUMO", StringComparison.Ordinal));
+        Assert.True(version.PlainText.IndexOf("RESUMO", StringComparison.Ordinal) < version.PlainText.IndexOf("COMPETENCIAS", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ReorderAsync_RejeitaIdsDuplicados()
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        var documentId = Guid.NewGuid();
+        var versionId = Guid.NewGuid();
+
+        db.ResumeDocuments.Add(new ResumeDocument { Id = documentId, UserId = userId, Title = "Base" });
+        db.ResumeVersions.Add(new ResumeVersion { Id = versionId, UserId = userId, ResumeDocumentId = documentId, Title = "Base" });
+        await db.SaveChangesAsync();
+
+        var service = new ResumeSectionService(db);
+        var section = await service.AddAsync(userId, versionId, new CreateResumeSectionRequest("summary", "Resumo", "{\"text\":\"Resumo\"}"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.ReorderAsync(userId, versionId, new ReorderResumeSectionsRequest([section.Id, section.Id])));
+    }
+
+    [Fact]
+    public async Task ReorderAsync_RejeitaSecaoDeOutraVersao()
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        var documentId = Guid.NewGuid();
+        var versionId = Guid.NewGuid();
+        var otherVersionId = Guid.NewGuid();
+
+        db.ResumeDocuments.Add(new ResumeDocument { Id = documentId, UserId = userId, Title = "Base" });
+        db.ResumeVersions.AddRange(
+            new ResumeVersion { Id = versionId, UserId = userId, ResumeDocumentId = documentId, Title = "Base" },
+            new ResumeVersion { Id = otherVersionId, UserId = userId, ResumeDocumentId = documentId, Title = "Outra" });
+        await db.SaveChangesAsync();
+
+        var service = new ResumeSectionService(db);
+        var section = await service.AddAsync(userId, versionId, new CreateResumeSectionRequest("summary", "Resumo", "{\"text\":\"Resumo\"}"));
+        var other = await service.AddAsync(userId, otherVersionId, new CreateResumeSectionRequest("skills", "Competencias", "{\"items\":[\"C#\"]}"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.ReorderAsync(userId, versionId, new ReorderResumeSectionsRequest([section.Id, other.Id])));
+    }
+
+    private static JobPilotDbContext CreateDb()
+    {
+        var options = new DbContextOptionsBuilder<JobPilotDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        return new JobPilotDbContext(options);
+    }
+}

@@ -616,6 +616,10 @@ namespace JobPilot.Api.Data.Migrations
 
                     b.HasIndex("JobLeadId");
 
+                    b.HasIndex("ResumeExportId");
+
+                    b.HasIndex("ResumeVersionId");
+
                     b.HasIndex("UserId", "ResumeExportId");
 
                     b.HasIndex("UserId", "ResumeVersionId");

@@ -1,11 +1,14 @@
 using System.Text.Json;
-using JobPilot.Api.Data;
 using JobPilot.Api.Domain;
+using JobPilot.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace JobPilot.Api.Services;
 
-public sealed class AgentLearningService
+public sealed class AgentLearningService(
+    IRepository<AgentLearning> learnings,
+    IRepository<Checkpoint> checkpoints,
+    IUnitOfWork unitOfWork)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly string[] SensitiveSignals =
@@ -15,13 +18,9 @@ public sealed class AgentLearningService
         "religiao", "religião", "passaporte", "passport", "disability", "race", "gender"
     ];
 
-    private readonly JobPilotDbContext _db;
-
-    public AgentLearningService(JobPilotDbContext db) => _db = db;
-
     public async Task<List<AgentLearning>> ListAsync(Guid userId, string? status, string? type = null, string? risk = null, string? domain = null)
     {
-        var query = _db.AgentLearnings.Where(x => x.UserId == userId);
+        var query = learnings.Query().Where(x => x.UserId == userId);
         if (!string.IsNullOrWhiteSpace(status))
             query = query.Where(x => x.Status == status);
         if (!string.IsNullOrWhiteSpace(type))
@@ -41,10 +40,10 @@ public sealed class AgentLearningService
     }
 
     public async Task<AgentLearning?> GetAsync(Guid userId, Guid id) =>
-        await _db.AgentLearnings.FirstOrDefaultAsync(x => x.UserId == userId && x.Id == id);
+        await learnings.FirstOrDefaultAsync(x => x.UserId == userId && x.Id == id);
 
     public async Task<List<AgentLearning>> ActiveAsync(Guid userId) =>
-        await _db.AgentLearnings
+        await learnings.Query()
             .Where(x => x.UserId == userId && (x.Status == AgentLearningStatuses.Approved || x.Status == AgentLearningStatuses.AutoApproved))
             .OrderByDescending(x => x.SuccessCount)
             .ThenBy(x => x.FailureCount)
@@ -56,7 +55,7 @@ public sealed class AgentLearningService
         var classification = Classify(request);
         var domain = NormalizeDomain(request.Domain);
         var patternKey = StablePatternKey(request.Domain, request.PatternKey, classification.Type);
-        var existing = await _db.AgentLearnings.FirstOrDefaultAsync(x =>
+        var existing = await learnings.FirstOrDefaultAsync(x =>
             x.UserId == userId &&
             x.Domain == domain &&
             x.PatternKey == patternKey);
@@ -72,7 +71,7 @@ public sealed class AgentLearningService
                 PatternKey = patternKey,
                 CreatedAt = DateTimeOffset.UtcNow
             };
-            _db.AgentLearnings.Add(existing);
+            learnings.Add(existing);
         }
 
         existing.LearningType = classification.Type;
@@ -85,7 +84,7 @@ public sealed class AgentLearningService
 
         if (existing.Status is AgentLearningStatuses.Rejected or AgentLearningStatuses.Disabled)
         {
-            await _db.SaveChangesAsync();
+            await unitOfWork.SaveChangesAsync();
             return existing;
         }
 
@@ -93,20 +92,20 @@ public sealed class AgentLearningService
             ? AgentLearningStatuses.AutoApproved
             : AgentLearningStatuses.Candidate;
 
-        await _db.SaveChangesAsync();
+        await unitOfWork.SaveChangesAsync();
         return existing;
     }
 
     public async Task<List<AgentLearning>> GenerateFromJobAsync(Guid userId, Guid applicationJobId)
     {
         var created = new List<AgentLearning>();
-        var checkpoints = await _db.Checkpoints
+        var jobCheckpoints = await checkpoints.Query()
             .Where(x => x.UserId == userId && x.ApplicationJobId == applicationJobId)
             .OrderByDescending(x => x.CreatedAt)
             .Take(10)
             .ToListAsync();
 
-        foreach (var checkpoint in checkpoints)
+        foreach (var checkpoint in jobCheckpoints)
         {
             var request = BuildFromCheckpoint(checkpoint);
             if (request is null) continue;
@@ -130,7 +129,7 @@ public sealed class AgentLearningService
         };
         learning.ReviewedAt = DateTimeOffset.UtcNow;
         learning.ReviewedBy = reviewerId;
-        await _db.SaveChangesAsync();
+        await unitOfWork.SaveChangesAsync();
         return learning;
     }
 
@@ -140,7 +139,7 @@ public sealed class AgentLearningService
             return null;
 
         var patternKey = request.PatternKey.Trim();
-        var learning = await _db.AgentLearnings.FirstOrDefaultAsync(x => x.UserId == userId && x.PatternKey == patternKey);
+        var learning = await learnings.FirstOrDefaultAsync(x => x.UserId == userId && x.PatternKey == patternKey);
         if (learning is null) return null;
 
         if (request.Success)
@@ -159,7 +158,7 @@ public sealed class AgentLearningService
                 learning.Status = AgentLearningStatuses.Disabled;
         }
 
-        await _db.SaveChangesAsync();
+        await unitOfWork.SaveChangesAsync();
         return learning;
     }
 

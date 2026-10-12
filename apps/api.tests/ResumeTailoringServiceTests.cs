@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using JobPilot.Api.Data;
 using JobPilot.Api.Domain;
 using JobPilot.Api.Services;
@@ -47,17 +49,18 @@ public class ResumeTailoringServiceTests
         });
         await db.SaveChangesAsync();
 
-        var service = new ResumeTailoringService(db, new ResumeEvidenceMapService(db), new FakeAiChatService());
+        var service = new ResumeTailoringService(db, TestServices.ResumeEvidenceMapService(db), new FakeAiChatService());
         var result = await service.BuildGenericAtsAsync(userId, new BuildGenericAtsResumeRequest(versionId, "ats_reverse_chronological"));
 
         Assert.NotEqual(Guid.Empty, result.TailoredVersionId);
         Assert.Equal(Guid.Empty, result.JobTargetId);
         Assert.Equal(Guid.Empty, result.EvidenceMapRunId);
         Assert.Contains("RESUMO PROFISSIONAL", result.PlainText);
-        Assert.Contains("COMPETENCIAS", result.PlainText);
-        Assert.Contains("EXPERIENCIA PROFISSIONAL", result.PlainText);
-        Assert.Contains("FORMACAO", result.PlainText);
+        AssertContainsIgnoringDiacritics("COMPETENCIAS", result.PlainText);
+        AssertContainsIgnoringDiacritics("EXPERIENCIA PROFISSIONAL", result.PlainText);
+        AssertContainsIgnoringDiacritics("FORMACAO", result.PlainText);
         Assert.Contains("ASP.NET Core", result.PlainText);
+        Assert.DoesNotContain("com uso de", result.PlainText, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("PENDENCIAS PARA REVISAO", result.PlainText);
         Assert.Contains(result.ScoreComponents, x => x.Key == "structure");
         Assert.Contains("Curriculo ATS", result.Version.Title);
@@ -71,11 +74,8 @@ public class ResumeTailoringServiceTests
     {
         var keys = ResumeTailoringService.LayoutOptions.Select(x => x.Key).ToArray();
 
-        Assert.Contains("ats_reverse_chronological", keys);
-        Assert.Contains("ats_classic", keys);
+        Assert.Contains("ats_standard", keys);
         Assert.Contains("ats_compact", keys);
-        Assert.Contains("ats_skills_first", keys);
-        Assert.Contains("ats_modern_minimal", keys);
         Assert.Contains("human_review", keys);
         Assert.All(ResumeTailoringService.LayoutOptions.Where(x => x.RecommendedForAts), option =>
         {
@@ -122,16 +122,18 @@ public class ResumeTailoringServiceTests
         });
         await db.SaveChangesAsync();
 
-        var service = new ResumeTailoringService(db, new ResumeEvidenceMapService(db), new FakeAiChatService());
+        var service = new ResumeTailoringService(db, TestServices.ResumeEvidenceMapService(db), new FakeAiChatService());
         var result = await service.BuildGenericAtsAsync(userId, new BuildGenericAtsResumeRequest(versionId, "ats_reverse_chronological"));
 
         Assert.DoesNotContain("CONTEUDO DO CURRICULO BASE", result.PlainText);
         Assert.DoesNotContain("TEXTO IMPORTADO", result.PlainText);
         Assert.DoesNotContain("contato@nicolasportie.com PERFIL PROFISSIONAL", result.PlainText);
         Assert.Contains("RESUMO PROFISSIONAL", result.PlainText);
-        Assert.Contains("Desenvolvedor de Software com experiencia", result.PlainText);
-        Assert.Contains("EXPERIENCIA PROFISSIONAL", result.PlainText);
-        Assert.Contains("FORMACAO", result.PlainText);
+        AssertContainsIgnoringDiacritics("Desenvolvedor de Software com experiencia", result.PlainText);
+        Assert.DoesNotContain("com uso de", result.PlainText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("C#, .NET, APIs", ExtractSummary(result.PlainText), StringComparison.OrdinalIgnoreCase);
+        AssertContainsIgnoringDiacritics("EXPERIENCIA PROFISSIONAL", result.PlainText);
+        AssertContainsIgnoringDiacritics("FORMACAO", result.PlainText);
         Assert.DoesNotContain("Penapolis/SP | (18) 99664-6794", result.PlainText);
         Assert.Equal(1, CountOccurrences(result.PlainText, "contato@nicolasportie.com"));
     }
@@ -172,13 +174,17 @@ public class ResumeTailoringServiceTests
             ResumeDocumentId = documentId,
             Title = "Base",
             TargetRole = "Desenvolvedor .NET",
-            PlainText = "Experiencia com C#, ASP.NET Core, APIs REST, SQL, JavaScript e dashboards web."
+            PlainText = "Experiencia com C#, ASP.NET Core, APIs REST, SQL, JavaScript e dashboards web.",
+            Sections =
+            [
+                Section(userId, versionId, "projects", "Projetos", 50, new { items = new[] { new { name = "Acesso Veicular", description = "Sistema desenvolvido com .\nSistema web com .NET e SQL para controle de entrada." } } })
+            ]
         });
         db.JobTargets.Add(new JobTarget
         {
             Id = targetId,
             UserId = userId,
-            Title = "Desenvolvedor .NET Junior",
+            Title = "desenvolvedor .NET junior home office",
             Company = "Acme",
             Workplace = "remote",
             Requirements =
@@ -191,7 +197,7 @@ public class ResumeTailoringServiceTests
         });
         await db.SaveChangesAsync();
 
-        var service = new ResumeTailoringService(db, new ResumeEvidenceMapService(db), new FakeAiChatService());
+        var service = new ResumeTailoringService(db, TestServices.ResumeEvidenceMapService(db), new FakeAiChatService());
         var result = await service.TailorAsync(userId, new TailorResumeRequest(versionId, targetId, UseAi: false));
 
         Assert.Equal("needs_review", result.Status);
@@ -199,9 +205,22 @@ public class ResumeTailoringServiceTests
         Assert.Contains("React", result.AdjacentKeywords);
         Assert.Contains("Kubernetes", result.ExcludedKeywords);
         Assert.Contains("Ingles avancado", result.ExcludedKeywords);
-        Assert.Contains("COMPETENCIAS COM EVIDENCIA", result.PlainText);
-        Assert.Contains("COMPETENCIAS RELACIONADAS", result.PlainText);
-        Assert.Contains("PENDENCIAS PARA REVISAO", result.PlainText);
+        Assert.Contains("Desenvolvedor .NET", result.PlainText);
+        Assert.DoesNotContain("Desenvolvedor .NET Junior", result.PlainText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(" junior", result.PlainText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("home office", result.PlainText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Sistema desenvolvido com .", result.PlainText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Sistema web com .NET e SQL", result.PlainText);
+        Assert.DoesNotContain("OBJETIVO", result.PlainText, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Desenvolvedor .NET", result.Version.TargetRole);
+        AssertContainsIgnoringDiacritics("COMPETENCIAS", result.PlainText);
+        AssertDoesNotContainIgnoringDiacritics("COMPETENCIAS COM EVIDENCIA", result.PlainText);
+        AssertDoesNotContainIgnoringDiacritics("COMPETENCIAS RELACIONADAS", result.PlainText);
+        AssertDoesNotContainIgnoringDiacritics("EVIDENCIAS RELEVANTES", result.PlainText);
+        AssertDoesNotContainIgnoringDiacritics("HISTORICO BASE", result.PlainText);
+        Assert.DoesNotContain("Evidências diretas para esta vaga", ExtractSummary(result.PlainText), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("PENDENCIAS PARA REVISAO", result.PlainText);
+        Assert.NotEmpty(result.Checkpoints);
         Assert.DoesNotContain("Kubernetes,", result.PlainText);
         Assert.DoesNotContain("Ingles avancado,", result.PlainText);
         Assert.Equal(5, result.ScoreComponents.Length);
@@ -226,6 +245,129 @@ public class ResumeTailoringServiceTests
         Assert.Contains("reviewQuestions", versions.Last().AtsReportJson);
         Assert.Single(await db.ResumeTailoringRuns.Where(x => x.UserId == userId).ToListAsync());
         Assert.Single(await db.ResumeEvidenceMapRuns.Where(x => x.UserId == userId).ToListAsync());
+    }
+
+    [Fact]
+    public async Task TailorAsync_RemoveEmpresaDaVagaDoHeadlineQuandoIaInclui()
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        var documentId = Guid.NewGuid();
+        var versionId = Guid.NewGuid();
+        var targetId = Guid.NewGuid();
+
+        db.CandidateProfiles.Add(new CandidateProfile
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            FullName = "Nicolas Portie",
+            Email = "nicolas@example.com",
+            Phone = "(11) 99999-9999",
+            City = "Sao Paulo",
+            Country = "Brazil",
+            TargetRole = "Desenvolvedor Back-end .NET",
+            ProfessionalSummary = "Desenvolvedor com experiencia em APIs REST, ASP.NET Core e SQL.",
+            Skills = ["C#", ".NET", "ASP.NET Core", "SQL"]
+        });
+        db.ResumeDocuments.Add(new ResumeDocument { Id = documentId, UserId = userId, Title = "Curriculo base", Status = "ready" });
+        db.ResumeVersions.Add(new ResumeVersion
+        {
+            Id = versionId,
+            UserId = userId,
+            ResumeDocumentId = documentId,
+            Title = "Base",
+            TargetRole = "Desenvolvedor Back-end .NET",
+            PlainText = "Nicolas Portie\nDesenvolvedor Back-end .NET\nExperiencia com C#, ASP.NET Core, APIs REST e SQL.",
+            Sections =
+            [
+                Section(userId, versionId, "summary", "Resumo", 20, new { text = "Desenvolvedor com experiencia em APIs REST, ASP.NET Core e SQL." }),
+                Section(userId, versionId, "skills", "Competencias", 30, new { items = new[] { "C#", ".NET", "ASP.NET Core", "SQL" } })
+            ]
+        });
+        db.JobTargets.Add(new JobTarget
+        {
+            Id = targetId,
+            UserId = userId,
+            Title = "Desenvolvedor Back-end .NET | nstech",
+            Company = "nstech",
+            Requirements =
+            [
+                Req(userId, targetId, "technology", "ASP.NET Core", "must_have", "asp.net-core", 1)
+            ]
+        });
+        await db.SaveChangesAsync();
+
+        var aiPlainText = """
+            Nicolas Portie
+            Desenvolvedor Back-end .NET | nstech
+            contato@nicolas@example.com | (11) 99999-9999
+
+            RESUMO PROFISSIONAL
+            Desenvolvedor com experiencia em APIs REST, ASP.NET Core e SQL.
+
+            COMPETENCIAS
+            C#, .NET, ASP.NET Core, SQL
+            """;
+        var service = new ResumeTailoringService(db, TestServices.ResumeEvidenceMapService(db), new FakeAiChatService(new TailoredResumeGenerationResponse(aiPlainText, [])));
+
+        var result = await service.TailorAsync(userId, new TailorResumeRequest(versionId, targetId, UseAi: true));
+
+        Assert.Contains("Desenvolvedor Back-end", result.PlainText);
+        Assert.DoesNotContain("Desenvolvedor Back-end .NET", HeaderBeforeFirstSection(result.PlainText), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Desenvolvedor Back-end .NET | nstech", result.PlainText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("nstech", HeaderBeforeFirstSection(result.PlainText), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Desenvolvedor Back-end", result.Version.TargetRole);
+        Assert.Equal("Curriculo direcionado - Desenvolvedor Back-end - nstech", result.Version.Title);
+    }
+
+    [Fact]
+    public async Task TailorAsync_UsaHeadlineGenericaSemSenioridadeOuStack()
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        var documentId = Guid.NewGuid();
+        var versionId = Guid.NewGuid();
+        var targetId = Guid.NewGuid();
+
+        db.CandidateProfiles.Add(new CandidateProfile
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            FullName = "Nicolas Portie",
+            Email = "nicolas@example.com",
+            TargetRole = "Desenvolvedor Back-end .NET",
+            ProfessionalSummary = "Desenvolvedor com experiencia em APIs REST.",
+            Skills = ["C#", ".NET", "ASP.NET Core"]
+        });
+        db.ResumeDocuments.Add(new ResumeDocument { Id = documentId, UserId = userId, Title = "Curriculo base", Status = "ready" });
+        db.ResumeVersions.Add(new ResumeVersion
+        {
+            Id = versionId,
+            UserId = userId,
+            ResumeDocumentId = documentId,
+            Title = "Base",
+            TargetRole = "Desenvolvedor Back-end .NET",
+            PlainText = "Nicolas Portie\nDesenvolvedor Back-end .NET\nExperiencia com C#, ASP.NET Core e APIs REST."
+        });
+        db.JobTargets.Add(new JobTarget
+        {
+            Id = targetId,
+            UserId = userId,
+            Title = "Desenvolvedor Back-end PL .NET",
+            Company = "Acme",
+            Requirements = [Req(userId, targetId, "technology", "ASP.NET Core", "must_have", "asp.net-core", 1)]
+        });
+        await db.SaveChangesAsync();
+
+        var service = new ResumeTailoringService(db, TestServices.ResumeEvidenceMapService(db), new FakeAiChatService(null));
+
+        var result = await service.TailorAsync(userId, new TailorResumeRequest(versionId, targetId, UseAi: false));
+        var header = HeaderBeforeFirstSection(result.PlainText);
+
+        Assert.Contains("Desenvolvedor Back-end", header);
+        Assert.DoesNotContain("PL", header, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(".NET", header, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Desenvolvedor Back-end", result.Version.TargetRole);
     }
 
     [Fact]
@@ -255,7 +397,7 @@ public class ResumeTailoringServiceTests
         });
         await db.SaveChangesAsync();
 
-        var evidenceService = new ResumeEvidenceMapService(db);
+        var evidenceService = TestServices.ResumeEvidenceMapService(db);
         var map = await evidenceService.BuildAsync(userId, new BuildResumeEvidenceMapRequest(versionId, targetId));
 
         var service = new ResumeTailoringService(db, evidenceService, new FakeAiChatService());
@@ -300,12 +442,13 @@ public class ResumeTailoringServiceTests
             Experiencia direta com Kubernetes, C# e plataformas cloud.
             """,
             []));
-        var service = new ResumeTailoringService(db, new ResumeEvidenceMapService(db), fakeAi);
+        var service = new ResumeTailoringService(db, TestServices.ResumeEvidenceMapService(db), fakeAi);
 
         var result = await service.TailorAsync(userId, new TailorResumeRequest(versionId, targetId, UseAi: true));
 
         Assert.DoesNotContain("Experiencia direta com Kubernetes", result.PlainText);
-        Assert.Contains("PENDENCIAS PARA REVISAO", result.PlainText);
+        Assert.DoesNotContain("PENDENCIAS PARA REVISAO", result.PlainText);
+        Assert.NotEmpty(result.Checkpoints);
         Assert.Contains("Kubernetes", result.ExcludedKeywords);
     }
 
@@ -345,6 +488,44 @@ public class ResumeTailoringServiceTests
             index += term.Length;
         }
         return count;
+    }
+
+    private static string ExtractSummary(string plainText)
+    {
+        var start = plainText.IndexOf("RESUMO PROFISSIONAL", StringComparison.OrdinalIgnoreCase);
+        if (start < 0) return "";
+        start += "RESUMO PROFISSIONAL".Length;
+        var next = plainText.IndexOf("\nCOMPET", start, StringComparison.OrdinalIgnoreCase);
+        if (next < 0) next = plainText.IndexOf("\r\nCOMPET", start, StringComparison.OrdinalIgnoreCase);
+        if (next < 0) next = plainText.Length;
+        return plainText[start..next];
+    }
+
+    private static string HeaderBeforeFirstSection(string plainText)
+    {
+        var start = plainText.IndexOf("RESUMO PROFISSIONAL", StringComparison.OrdinalIgnoreCase);
+        if (start < 0) start = plainText.IndexOf("COMPETENCIAS", StringComparison.OrdinalIgnoreCase);
+        if (start < 0) return plainText;
+        return plainText[..start];
+    }
+
+    private static void AssertContainsIgnoringDiacritics(string expected, string actual) =>
+        Assert.Contains(RemoveDiacritics(expected), RemoveDiacritics(actual), StringComparison.OrdinalIgnoreCase);
+
+    private static void AssertDoesNotContainIgnoringDiacritics(string expected, string actual) =>
+        Assert.DoesNotContain(RemoveDiacritics(expected), RemoveDiacritics(actual), StringComparison.OrdinalIgnoreCase);
+
+    private static string RemoveDiacritics(string value)
+    {
+        var normalized = value.Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder(normalized.Length);
+        foreach (var c in normalized)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+                sb.Append(c);
+        }
+
+        return sb.ToString().Normalize(NormalizationForm.FormC);
     }
 
     private static JobPilotDbContext CreateDb()

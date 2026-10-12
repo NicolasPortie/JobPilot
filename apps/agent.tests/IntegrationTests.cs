@@ -1,6 +1,6 @@
 using System.Net;
-using JobPilot.Agent.Browser;
 using JobPilot.Agent.Application;
+using JobPilot.Agent.Browser;
 using JobPilot.Agent.Domain;
 using JobPilot.Agent.Infrastructure;
 using JobPilot.Agent.Platforms.LinkedIn;
@@ -63,7 +63,7 @@ public class IntegrationTests : IAsyncLifetime
         await _page!.GotoAsync($"file:///{_testFormPath.Replace("\\", "/")}");
         await _page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        // Act: observar e preencher campo a campo usando resolução semântica
+        // Act: observar e preencher campo a campo usando resolucao semantica
         var observation = await PageObserver.ObserveAsync(_page);
 
         foreach (var field in observation.Elements.Where(e => e.IsTextEntry && !e.IsFile))

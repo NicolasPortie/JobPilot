@@ -1,13 +1,16 @@
-using JobPilot.Api.Data;
 using JobPilot.Api.Domain;
+using JobPilot.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace JobPilot.Api.Services;
 
 public sealed class ApplicationResumePreparationService(
-    JobPilotDbContext db,
+    IRepository<ApplicationJob> jobs,
+    IRepository<ResumeVersion> versions,
+    IRepository<ExecutionEvent> events,
+    IUnitOfWork unitOfWork,
     JobTargetService jobTargetService,
-    ResumeTailoringService tailoringService,
+    IResumeTailoringService tailoringService,
     ResumeExportService exportService,
     ApplicationResumeService applicationResumeService)
 {
@@ -21,7 +24,7 @@ public sealed class ApplicationResumePreparationService(
     {
         try
         {
-            var task = await db.ApplicationJobs
+            var task = await jobs.Query()
                 .Include(x => x.JobLead)
                 .FirstOrDefaultAsync(x => x.Id == applicationJobId && x.UserId == userId);
             if (task?.JobLead is null)
@@ -33,7 +36,7 @@ public sealed class ApplicationResumePreparationService(
             if (task.ResumeExportId is not null && !string.IsNullOrWhiteSpace(task.ResumeFilePath) && File.Exists(task.ResumeFilePath))
                 return;
 
-            var baseVersion = await db.ResumeVersions
+            var baseVersion = await versions.Query()
                 .Where(x => x.UserId == userId && !string.IsNullOrWhiteSpace(x.PlainText))
                 .OrderByDescending(x => x.UpdatedAt)
                 .FirstOrDefaultAsync();
@@ -50,19 +53,18 @@ public sealed class ApplicationResumePreparationService(
             }
 
             var target = await jobTargetService.OrganizeAsync(userId, new OrganizeJobTargetRequest(
-                task.JobLead.Id,
-                "job_lead",
-                null,
+                "manual_text",
+                $"{task.JobLead.Title}\n{task.JobLead.Company}\n{task.JobLead.Location}\n{task.JobLead.Description}",
                 null,
                 UseAi: false));
             var tailored = await tailoringService.TailorAsync(userId, new TailorResumeRequest(
                 baseVersion.Id,
                 target.Id,
                 UseAi: false));
-            var export = await exportService.ExportAsync(userId, tailored.TailoredVersionId, new CreateResumeExportRequest("docx"));
+            var export = await exportService.ExportAsync(userId, tailored.TailoredVersionId, new CreateResumeExportRequest("word"));
             await applicationResumeService.AssignAsync(userId, task.Id, new ApplicationJobResumeRequest(tailored.TailoredVersionId, export.Id));
 
-            await RecordEventAsync(userId, task.Id, "application.resume_prepared", $"Curriculo DOCX preparado automaticamente. version={tailored.TailoredVersionId}; export={export.Id}.");
+            await RecordEventAsync(userId, task.Id, "application.resume_prepared", $"Curriculo Word preparado automaticamente. version={tailored.TailoredVersionId}; export={export.Id}.");
         }
         catch (Exception ex)
         {
@@ -72,7 +74,7 @@ public sealed class ApplicationResumePreparationService(
 
     private async Task RecordEventAsync(Guid userId, Guid applicationJobId, string eventType, string detail)
     {
-        db.ExecutionEvents.Add(new ExecutionEvent
+        events.Add(new ExecutionEvent
         {
             Id = Guid.NewGuid(),
             UserId = userId,
@@ -80,6 +82,6 @@ public sealed class ApplicationResumePreparationService(
             EventType = eventType,
             Detail = detail
         });
-        await db.SaveChangesAsync();
+        await unitOfWork.SaveChangesAsync();
     }
 }

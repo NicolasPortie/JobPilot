@@ -1,44 +1,44 @@
-using JobPilot.Api.Data;
 using JobPilot.Api.Domain;
+using JobPilot.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace JobPilot.Api.Services;
 
-public sealed class ApplicationMaintenanceService
+public sealed class ApplicationMaintenanceService(
+    IRepository<AgentRun> runs,
+    IRepository<ApplicationJob> jobs,
+    IRepository<ExecutionEvent> events,
+    IUnitOfWork unitOfWork)
 {
-    private readonly JobPilotDbContext _db;
-
-    public ApplicationMaintenanceService(JobPilotDbContext db)
-    {
-        _db = db;
-    }
-
     public async Task<ApplicationMaintenanceResult> RecoverStaleWorkAsync(DateTimeOffset now, Guid? userId = null, CancellationToken cancellationToken = default)
     {
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+
         var staleRuns = await RecoverStaleAgentRunsAsync(now, userId, cancellationToken);
         var staleJobs = await RecoverStaleApplicationJobsAsync(now, userId, cancellationToken);
         if (staleRuns > 0 || staleJobs > 0)
-            await _db.SaveChangesAsync(cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        await unitOfWork.CommitAsync(cancellationToken);
         return new ApplicationMaintenanceResult(staleRuns, staleJobs);
     }
 
     private async Task<int> RecoverStaleAgentRunsAsync(DateTimeOffset now, Guid? userId, CancellationToken cancellationToken)
     {
         var cutoff = now.AddHours(-2);
-        var query = _db.AgentRuns
+        var query = runs.Query()
             .Where(x => x.State == "running" && x.StartedAt < cutoff)
             .AsQueryable();
         if (userId is not null)
             query = query.Where(x => x.UserId == userId);
 
-        var runs = await query.ToListAsync(cancellationToken);
+        var staleRuns = await query.ToListAsync(cancellationToken);
 
-        foreach (var run in runs)
+        foreach (var run in staleRuns)
         {
             run.State = "failed";
             run.CompletedAt = now;
-            _db.ExecutionEvents.Add(new ExecutionEvent
+            events.Add(new ExecutionEvent
             {
                 Id = Guid.NewGuid(),
                 UserId = run.UserId,
@@ -48,25 +48,25 @@ public sealed class ApplicationMaintenanceService
             });
         }
 
-        return runs.Count;
+        return staleRuns.Count;
     }
 
     private async Task<int> RecoverStaleApplicationJobsAsync(DateTimeOffset now, Guid? userId, CancellationToken cancellationToken)
     {
         var cutoff = now.AddMinutes(-10);
-        var query = _db.ApplicationJobs
+        var query = jobs.Query()
             .Include(x => x.JobLead)
             .Where(x => x.State == JobStatuses.Opening || x.State == JobStatuses.Filling)
             .AsQueryable();
         if (userId is not null)
             query = query.Where(x => x.UserId == userId);
 
-        var jobs = await query.ToListAsync(cancellationToken);
+        var staleJobs = await query.ToListAsync(cancellationToken);
 
         var recovered = 0;
-        foreach (var job in jobs)
+        foreach (var job in staleJobs)
         {
-            var lastEventAt = await _db.ExecutionEvents
+            var lastEventAt = await events.Query()
                 .Where(x => x.UserId == job.UserId && x.ApplicationJobId == job.Id)
                 .MaxAsync(x => (DateTimeOffset?)x.OccurredAt, cancellationToken) ?? job.CreatedAt;
 
@@ -82,7 +82,7 @@ public sealed class ApplicationMaintenanceService
                 job.JobLead.AutomationReason = "agent_interrupted";
             }
 
-            _db.ExecutionEvents.Add(new ExecutionEvent
+            events.Add(new ExecutionEvent
             {
                 Id = Guid.NewGuid(),
                 UserId = job.UserId,
@@ -109,7 +109,17 @@ public sealed class RunMaintenanceService(IServiceScopeFactory scopeFactory, ILo
             {
                 using var scope = scopeFactory.CreateScope();
                 var maintenance = scope.ServiceProvider.GetRequiredService<ApplicationMaintenanceService>();
+                var retention = scope.ServiceProvider.GetRequiredService<RetentionService>();
                 var result = await maintenance.RecoverStaleWorkAsync(DateTimeOffset.UtcNow, cancellationToken: stoppingToken);
+                var cleanup = await retention.CleanupExpiredAsync(DateTimeOffset.UtcNow, stoppingToken);
+                if (cleanup.AiUsageLogsRemoved > 0 || cleanup.ExportsRemoved > 0)
+                {
+                    logger.LogInformation(
+                        "Retention cleanup removed logs and exports. AiUsageLogs={Logs}; Exports={Exports}; Files={Files}.",
+                        cleanup.AiUsageLogsRemoved,
+                        cleanup.ExportsRemoved,
+                        cleanup.FilesRemoved);
+                }
                 if (result.StaleAgentRuns > 0 || result.StaleApplicationJobs > 0)
                 {
                     logger.LogInformation(

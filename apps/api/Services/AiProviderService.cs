@@ -1,38 +1,35 @@
-using JobPilot.Api.Data;
+using JobPilot.Api.Application;
 using JobPilot.Api.Domain;
+using JobPilot.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace JobPilot.Api.Services;
 
-public sealed class AiProviderService
+public sealed class AiProviderService(
+    IRepository<AiProvider> providers,
+    IUnitOfWork unitOfWork,
+    IConfiguration configuration,
+    AiCompletionService completion)
 {
-    private readonly JobPilotDbContext _db;
-    private readonly IConfiguration _configuration;
-    private readonly IAiChatService _ai;
-
-    public AiProviderService(JobPilotDbContext db, IConfiguration configuration, IAiChatService ai)
-    {
-        _db = db;
-        _configuration = configuration;
-        _ai = ai;
-    }
-
     public async Task<List<AiProviderResponse>> ListAsync(Guid userId)
     {
-        var providers = await _db.AiProviders
+        var allProviders = await providers.Query()
             .Where(x => x.UserId == userId)
             .OrderByDescending(x => x.IsDefault)
             .ThenBy(x => x.Name)
             .ToListAsync();
 
-        return providers.Select(ToResponse).ToList();
+        return allProviders.Select(ToResponse).ToList();
     }
 
-    public async Task<IResult> CreateAsync(Guid userId, AiProviderRequest request)
+    public async Task<ServiceResult<AiProviderResponse>> CreateAsync(Guid userId, AiProviderRequest request)
     {
+        AiProviderEndpointPolicy.Validate(request, configuration);
         if (request.IsDefault)
         {
-            await _db.AiProviders.Where(x => x.UserId == userId).ExecuteUpdateAsync(x => x.SetProperty(p => p.IsDefault, false));
+            await providers.Query()
+                .Where(x => x.UserId == userId)
+                .ExecuteUpdateAsync(x => x.SetProperty(p => p.IsDefault, false));
         }
 
         var provider = new AiProvider
@@ -44,24 +41,27 @@ public sealed class AiProviderService
             BaseUrl = request.BaseUrl,
             Model = request.Model,
             ApiFormat = request.ApiFormat,
-            EncryptedApiKey = SecretProtector.Protect(request.ApiKey, _configuration),
+            EncryptedApiKey = SecretProtector.Protect(request.ApiKey, configuration),
             IsActive = request.IsActive,
             IsDefault = request.IsDefault
         };
 
-        _db.AiProviders.Add(provider);
-        await _db.SaveChangesAsync();
-        return Results.Created($"/api/ai/providers/{provider.Id}", ToResponse(provider));
+        providers.Add(provider);
+        await unitOfWork.SaveChangesAsync();
+        return ServiceResult<AiProviderResponse>.Created(ToResponse(provider));
     }
 
-    public async Task<IResult> UpdateAsync(Guid userId, Guid id, AiProviderRequest request)
+    public async Task<ServiceResult<AiProviderResponse>> UpdateAsync(Guid userId, Guid id, AiProviderRequest request)
     {
-        var provider = await _db.AiProviders.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId);
-        if (provider is null) return Results.NotFound();
+        AiProviderEndpointPolicy.Validate(request, configuration);
+        var provider = await providers.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId);
+        if (provider is null) return ServiceResult<AiProviderResponse>.NotFound();
 
         if (request.IsDefault)
         {
-            await _db.AiProviders.Where(x => x.UserId == userId && x.Id != id).ExecuteUpdateAsync(x => x.SetProperty(p => p.IsDefault, false));
+            await providers.Query()
+                .Where(x => x.UserId == userId && x.Id != id)
+                .ExecuteUpdateAsync(x => x.SetProperty(p => p.IsDefault, false));
         }
 
         provider.Apply(new AiProvider
@@ -76,30 +76,30 @@ public sealed class AiProviderService
         });
         if (!string.IsNullOrWhiteSpace(request.ApiKey))
         {
-            provider.EncryptedApiKey = SecretProtector.Protect(request.ApiKey, _configuration);
+            provider.EncryptedApiKey = SecretProtector.Protect(request.ApiKey, configuration);
         }
 
-        await _db.SaveChangesAsync();
-        return Results.Ok(ToResponse(provider));
+        await unitOfWork.SaveChangesAsync();
+        return ServiceResult<AiProviderResponse>.Ok(ToResponse(provider));
     }
 
-    public async Task<IResult> DeleteAsync(Guid userId, Guid id)
+    public async Task<ServiceResult<AiProviderResponse>> DeleteAsync(Guid userId, Guid id)
     {
-        var provider = await _db.AiProviders.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId);
-        if (provider is null) return Results.NotFound();
+        var provider = await providers.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId);
+        if (provider is null) return ServiceResult<AiProviderResponse>.NotFound();
 
-        _db.AiProviders.Remove(provider);
-        await _db.SaveChangesAsync();
-        return Results.NoContent();
+        providers.Remove(provider);
+        await unitOfWork.SaveChangesAsync();
+        return ServiceResult<AiProviderResponse>.NoContent();
     }
 
-    public async Task<IResult> TestAsync(Guid userId, Guid id)
+    public async Task<ServiceResult<AiProviderTestResponse>> TestAsync(Guid userId, Guid id)
     {
-        var provider = await _db.AiProviders.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId);
-        if (provider is null) return Results.NotFound();
+        var provider = await providers.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId);
+        if (provider is null) return ServiceResult<AiProviderTestResponse>.NotFound();
 
-        var response = await _ai.TestProviderAsync(userId, id);
-        return Results.Ok(new { ok = response.UsedKimi, provider = provider.Name, model = response.Model, sample = response.Text });
+        var response = await completion.TestProviderConnectivityAsync(provider, userId);
+        return ServiceResult<AiProviderTestResponse>.Ok(new(response.Ok, provider.Name, response.Model, response.Sample, response.Error));
     }
 
     private static AiProviderResponse ToResponse(AiProvider provider) =>
@@ -115,3 +115,5 @@ public sealed class AiProviderService
             provider.IsDefault,
             provider.UpdatedAt);
 }
+
+public sealed record AiProviderTestResponse(bool Ok, string Provider, string Model, string Sample, string? Error);

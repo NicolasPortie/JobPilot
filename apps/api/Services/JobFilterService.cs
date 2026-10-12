@@ -1,14 +1,13 @@
-using JobPilot.Api.Data;
 using JobPilot.Api.Domain;
-using Microsoft.EntityFrameworkCore;
+using JobPilot.Api.Infrastructure.Persistence;
 
 namespace JobPilot.Api.Services;
 
-public class JobFilterService(JobPilotDbContext db)
+public class JobFilterService(IRepository<JobFilter> filters, IUnitOfWork unitOfWork)
 {
     public async Task<JobFilter> GetOrCreateAsync(Guid userId)
     {
-        var filter = await db.JobFilters.FirstOrDefaultAsync(x => x.UserId == userId);
+        var filter = await filters.FirstOrDefaultAsync(x => x.UserId == userId);
         if (filter is not null)
         {
             var normalized = NormalizeApplyTypes(filter.AllowedApplyTypes);
@@ -16,7 +15,7 @@ public class JobFilterService(JobPilotDbContext db)
             {
                 filter.AllowedApplyTypes = normalized;
                 filter.UpdatedAt = DateTimeOffset.UtcNow;
-                await db.SaveChangesAsync();
+                await unitOfWork.SaveChangesAsync();
             }
 
             return filter;
@@ -26,18 +25,43 @@ public class JobFilterService(JobPilotDbContext db)
         {
             Id = Guid.NewGuid(),
             UserId = userId,
-            AllowedSeniorities = ["junior"],
-            BlockedSeniorities = ["senior", "sênior", "sr", "sr.", "pleno", "pl", "staff", "principal", "lead", "manager", "coordenador"],
-            AllowedRoleKeywords = ["asp.net", ".net", "c#", "full stack", "fullstack", "qa", "tester", "quality assurance", "arquiteto asp.net", "asp.net architect"],
-            BlockedRoleKeywords = ["suporte", "support", "infra", "sre", "devops", "security", "seguranca", "data engineer", "dados"],
-            AllowedWorkplaceTypes = ["remote"],
-            BlockedWorkplaceTypes = ["hybrid", "híbrido", "hibrido", "onsite", "on-site", "presencial"],
-            AllowedApplyTypes = ["linkedin_easy_apply", "inhire"],
-            MinScore = 30,
-            AutoIgnoreLowScore = true
+            AllowedSeniorities = [],
+            BlockedSeniorities = [],
+            AllowedRoleKeywords = [],
+            BlockedRoleKeywords = [],
+            AllowedWorkplaceTypes = [],
+            BlockedWorkplaceTypes = [],
+            AllowedApplyTypes = [],
+            MinScore = 0,
+            AutoIgnoreLowScore = false
         };
-        db.JobFilters.Add(filter);
-        await db.SaveChangesAsync();
+        filters.Add(filter);
+        await unitOfWork.SaveChangesAsync();
+        return filter;
+    }
+
+    public async Task<JobFilter> SaveAsync(Guid userId, JobFilterRequest request)
+    {
+        var filter = await filters.FirstOrDefaultAsync(candidate => candidate.UserId == userId);
+        if (filter is null)
+        {
+            filter = new JobFilter { Id = Guid.NewGuid(), UserId = userId };
+            filters.Add(filter);
+        }
+
+        filter.Apply(new JobFilter
+        {
+            AllowedSeniorities = request.AllowedSeniorities,
+            BlockedSeniorities = request.BlockedSeniorities,
+            AllowedRoleKeywords = request.AllowedRoleKeywords,
+            BlockedRoleKeywords = request.BlockedRoleKeywords,
+            AllowedWorkplaceTypes = request.AllowedWorkplaceTypes,
+            BlockedWorkplaceTypes = request.BlockedWorkplaceTypes,
+            AllowedApplyTypes = request.AllowedApplyTypes,
+            MinScore = request.MinScore,
+            AutoIgnoreLowScore = request.AutoIgnoreLowScore
+        });
+        await unitOfWork.SaveChangesAsync();
         return filter;
     }
 

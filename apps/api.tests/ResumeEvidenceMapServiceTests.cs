@@ -49,22 +49,28 @@ public class ResumeEvidenceMapServiceTests
                 Req(userId, targetId, "technology", "ASP.NET Core", "must_have", "asp.net-core", 1),
                 Req(userId, targetId, "technology", "React", "nice_to_have", "react", 2),
                 Req(userId, targetId, "technology", "Kubernetes", "must_have", "kubernetes", 3),
-                Req(userId, targetId, "language", "Ingles avancado", "must_have", "ingles-avancado", 4)
+                Req(userId, targetId, "technology", "SQL Server", "must_have", "sql-server", 4),
+                Req(userId, targetId, "technology", "RabbitMQ", "nice_to_have", "rabbitmq", 5),
+                Req(userId, targetId, "technology", "Injecao de dependencia", "nice_to_have", "injecao-de-dependencia", 6),
+                Req(userId, targetId, "language", "Ingles avancado", "must_have", "ingles-avancado", 7)
             ]
         });
         await db.SaveChangesAsync();
 
-        var service = new ResumeEvidenceMapService(db);
+        var service = TestServices.ResumeEvidenceMapService(db);
         var result = await service.BuildAsync(userId, new BuildResumeEvidenceMapRequest(versionId, targetId));
 
         Assert.Equal("needs_review", result.Status);
         Assert.Contains(result.Items, x => x.RequirementLabel == "ASP.NET Core" && x.MatchStatus == "proven");
         Assert.Contains(result.Items, x => x.RequirementLabel == "React" && x.MatchStatus == "adjacent");
         Assert.Contains(result.Items, x => x.RequirementLabel == "Kubernetes" && x.MatchStatus == "missing");
+        Assert.Contains(result.Items, x => x.RequirementLabel == "SQL Server" && x.MatchStatus == "adjacent");
+        Assert.Contains(result.Items, x => x.RequirementLabel == "RabbitMQ" && x.MatchStatus == "adjacent");
+        Assert.Contains(result.Items, x => x.RequirementLabel == "Injecao de dependencia" && x.MatchStatus == "adjacent");
         Assert.Contains(result.Items, x => x.RequirementLabel == "Ingles avancado" && x.MatchStatus == "unknown");
         Assert.True(result.EvidenceScore < 100);
         Assert.Single(await db.ResumeEvidenceMapRuns.Where(x => x.UserId == userId).ToListAsync());
-        Assert.Equal(4, await db.ResumeRequirementEvidences.CountAsync(x => x.UserId == userId));
+        Assert.Equal(7, await db.ResumeRequirementEvidences.CountAsync(x => x.UserId == userId));
     }
 
     private static JobRequirement Req(Guid userId, Guid targetId, string category, string label, string importance, string keyword, int order) =>

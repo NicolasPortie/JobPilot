@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -26,7 +26,7 @@ namespace JobPilot.Api.Data.Migrations
 
             migrationBuilder.Sql("""
                 UPDATE "JobFilters"
-                SET "BlockedSeniorities" = array_remove(array_remove("BlockedSeniorities", 'architect'), 'arquiteto')
+                SET "BlockedSeniorities" = array_remove(array_remove("BlockedSeniorities", 'architect'), 'arquiteto');
                 """);
         }
 

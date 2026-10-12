@@ -1,0 +1,56 @@
+/* ---------- Responsivo ---------- */
+@media (max-width: 1400px) {
+  .cv-donut {
+    width: 88px;
+    height: 88px;
+  }
+
+  .cv-donut__inner {
+    width: 64px;
+    height: 64px;
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .cv-pagehead {
+    grid-template-columns: 1fr;
+  }
+
+  .cv-page {
+    grid-template-columns: 1fr;
+  }
+
+  .cv-rail {
+    grid-template-columns: 1fr;
+  }
+
+  .cv-insights__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cv-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .cv-top {
+    flex-direction: column;
+  }
+
+  .cv-topbanner {
+    min-width: 0;
+  }
+
+  .cv-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cv-footer__actions {
+    margin-left: 0;
+  }
+
+  .cv-footer__actions .cv-btn {
+    flex: 1;
+  }
+}

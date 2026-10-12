@@ -35,6 +35,12 @@ public sealed class LinkedInNavigator
     public Task<bool> NeedsLoginAsync(IPage page) =>
         _login.NeedsLoginAsync(page);
 
+    public Task<bool> HasPersistedSessionAsync(IPage page) =>
+        _login.HasPersistedSessionAsync(page);
+
+    public Task<bool> TryRestorePersistedSessionAsync(IPage page, string returnUrl) =>
+        _login.TryRestorePersistedSessionAsync(page, returnUrl);
+
     public Task<bool> TryLoginAsync(IPage page, string? email = null, string? password = null) =>
         _login.TryLoginAsync(page, email, password);
 }

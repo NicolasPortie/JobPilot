@@ -1,14 +1,53 @@
+using System.IO.Compression;
 using JobPilot.Api.Data;
 using JobPilot.Api.Domain;
 using JobPilot.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using System.IO.Compression;
 
 namespace JobPilot.Api.Tests;
 
 public class ResumeExportServiceTests
 {
+    [Fact]
+    public async Task ExportAsync_RepeatedExportsPreservePreviousFiles()
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        var document = new ResumeDocument { Id = Guid.NewGuid(), UserId = userId, Title = "Base" };
+        var version = new ResumeVersion
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            ResumeDocumentId = document.Id,
+            Title = "Base",
+            TargetRole = new string('A', 120),
+            PlainText = "Primeiro conteudo"
+        };
+        db.ResumeDocuments.Add(document);
+        db.ResumeVersions.Add(version);
+        await db.SaveChangesAsync();
+        var root = Path.Combine(Path.GetTempPath(), "jobpilot-export-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var service = new ResumeExportService(db, Config(root));
+            var first = await service.ExportAsync(userId, version.Id, new("txt"));
+            version.PlainText = "Segundo conteudo";
+            await db.SaveChangesAsync();
+            var second = await service.ExportAsync(userId, version.Id, new("txt"));
+            var firstFile = (await db.ResumeExports.SingleAsync(x => x.Id == first.Id)).FilePath;
+            var secondFile = (await db.ResumeExports.SingleAsync(x => x.Id == second.Id)).FilePath;
+
+            Assert.NotEqual(firstFile, secondFile);
+            Assert.Contains("Primeiro conteudo", await File.ReadAllTextAsync(firstFile));
+            Assert.Contains("Segundo conteudo", await File.ReadAllTextAsync(secondFile));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task ExportAsync_Txt_CriaArquivoEPersisteAuditoria()
     {
@@ -41,12 +80,13 @@ public class ResumeExportServiceTests
 
         var service = new ResumeExportService(db, Config(exportRoot));
         var result = await service.ExportAsync(userId, versionId, new CreateResumeExportRequest("txt"));
+        var exportedFile = (await db.ResumeExports.SingleAsync(x => x.Id == result.Id)).FilePath;
 
         Assert.Equal("txt", result.Format);
-        Assert.True(File.Exists(result.FilePath));
-        Assert.Contains("Desenvolvedor .NET", await File.ReadAllTextAsync(result.FilePath));
+        Assert.True(File.Exists(exportedFile));
+        Assert.Contains("Desenvolvedor .NET", await File.ReadAllTextAsync(exportedFile));
         Assert.Single(await db.ResumeExports.Where(x => x.UserId == userId && x.ResumeVersionId == versionId).ToListAsync());
-        Assert.Contains(userId.ToString("N"), result.FilePath);
+        Assert.Contains(userId.ToString("N"), exportedFile);
     }
 
     [Fact]
@@ -78,12 +118,13 @@ public class ResumeExportServiceTests
 
         var service = new ResumeExportService(db, Config(exportRoot));
         var result = await service.ExportAsync(userId, versionId, new CreateResumeExportRequest("docx"));
+        var exportedFile = (await db.ResumeExports.SingleAsync(x => x.Id == result.Id)).FilePath;
 
         Assert.Equal("docx", result.Format);
-        Assert.EndsWith(".docx", result.FilePath, StringComparison.OrdinalIgnoreCase);
-        Assert.True(File.Exists(result.FilePath));
+        Assert.EndsWith(".docx", exportedFile, StringComparison.OrdinalIgnoreCase);
+        Assert.True(File.Exists(exportedFile));
 
-        using var archive = ZipFile.OpenRead(result.FilePath);
+        using var archive = ZipFile.OpenRead(exportedFile);
         var documentEntry = archive.GetEntry("word/document.xml");
         Assert.NotNull(documentEntry);
         using var reader = new StreamReader(documentEntry.Open());
@@ -134,10 +175,11 @@ public class ResumeExportServiceTests
 
         var service = new ResumeExportService(db, Config(exportRoot));
         var result = await service.ExportAsync(userId, versionId, new CreateResumeExportRequest("pdf"));
+        var exportedFile = (await db.ResumeExports.SingleAsync(x => x.Id == result.Id)).FilePath;
 
         Assert.Equal("pdf", result.Format);
-        Assert.EndsWith(".pdf", result.FilePath, StringComparison.OrdinalIgnoreCase);
-        Assert.True(File.Exists(result.FilePath));
+        Assert.EndsWith(".pdf", exportedFile, StringComparison.OrdinalIgnoreCase);
+        Assert.True(File.Exists(exportedFile));
 
         var saved = await db.ResumeExports.SingleAsync(x => x.UserId == userId && x.ResumeVersionId == versionId && x.Format == "pdf");
         Assert.Contains("Nicolas Portié", saved.ParseText);
@@ -150,6 +192,32 @@ public class ResumeExportServiceTests
         Assert.Contains("ASP.NET Core", saved.ParseText);
         Assert.Contains("React", saved.ParseText);
         Assert.DoesNotContain("perdeu muitos termos", string.Join(" ", result.ParseWarnings), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ExportAsync_Pdf_Longo_AvisaNumeroDePaginas()
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        var documentId = Guid.NewGuid();
+        var versionId = Guid.NewGuid();
+        var exportRoot = Path.Combine(Path.GetTempPath(), "jobpilot-export-tests", Guid.NewGuid().ToString("N"));
+
+        db.ResumeDocuments.Add(new ResumeDocument { Id = documentId, UserId = userId, Title = "Base" });
+        db.ResumeVersions.Add(new ResumeVersion
+        {
+            Id = versionId,
+            UserId = userId,
+            ResumeDocumentId = documentId,
+            Title = "Longo",
+            PlainText = string.Join("\n", Enumerable.Range(1, 300).Select(i => $"Linha {i}: experiencia com C#, .NET, APIs REST, SQL e React em projetos corporativos.")),
+        });
+        await db.SaveChangesAsync();
+
+        var service = new ResumeExportService(db, Config(exportRoot));
+        var result = await service.ExportAsync(userId, versionId, new CreateResumeExportRequest("pdf"));
+
+        Assert.Contains("páginas", string.Join(" ", result.ParseWarnings), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

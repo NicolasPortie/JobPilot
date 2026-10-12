@@ -1,31 +1,37 @@
-using JobPilot.Api.Data;
+using System.Security.Cryptography;
+using JobPilot.Api.Application;
 using JobPilot.Api.Domain;
-using Microsoft.EntityFrameworkCore;
+using JobPilot.Api.Infrastructure.Persistence;
+using Microsoft.Extensions.Logging;
 
 namespace JobPilot.Api.Services;
 
-public sealed class PlatformCredentialService
+public sealed class PlatformCredentialService : IPlatformCredentialService
 {
-    private readonly JobPilotDbContext _db;
+    private readonly IRepository<PlatformCredential> _credentials;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly IConfiguration _configuration;
+    private readonly ILogger<PlatformCredentialService> _logger;
 
-    public PlatformCredentialService(JobPilotDbContext db, IConfiguration configuration)
+    public PlatformCredentialService(
+        IRepository<PlatformCredential> credentials,
+        IUnitOfWork unitOfWork,
+        IConfiguration configuration,
+        ILogger<PlatformCredentialService> logger)
     {
-        _db = db;
+        _credentials = credentials;
+        _unitOfWork = unitOfWork;
         _configuration = configuration;
+        _logger = logger;
     }
 
     public async Task<List<PlatformCredentialResponse>> ListAsync(Guid userId)
     {
-        var credentials = await _db.PlatformCredentials
-            .Where(x => x.UserId == userId)
-            .OrderBy(x => x.Platform)
-            .ToListAsync();
-
-        return credentials.Select(ToResponse).ToList();
+        var credentials = await _credentials.ListAsync(x => x.UserId == userId);
+        return credentials.OrderBy(x => x.Platform).Select(ToResponse).ToList();
     }
 
-    public async Task<IResult> CreateAsync(Guid userId, PlatformCredentialRequest request)
+    public async Task<ServiceResult<PlatformCredentialResponse>> CreateAsync(Guid userId, PlatformCredentialRequest request)
     {
         var credential = new PlatformCredential
         {
@@ -37,15 +43,15 @@ public sealed class PlatformCredentialService
             IsActive = request.IsActive
         };
 
-        _db.PlatformCredentials.Add(credential);
-        await _db.SaveChangesAsync();
-        return Results.Created($"/api/platform-credentials/{credential.Id}", ToResponse(credential));
+        _credentials.Add(credential);
+        await _unitOfWork.SaveChangesAsync();
+        return ServiceResult<PlatformCredentialResponse>.Created(ToResponse(credential));
     }
 
-    public async Task<IResult> UpdateAsync(Guid userId, Guid id, PlatformCredentialRequest request)
+    public async Task<ServiceResult<PlatformCredentialResponse>> UpdateAsync(Guid userId, Guid id, PlatformCredentialRequest request)
     {
-        var credential = await _db.PlatformCredentials.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId);
-        if (credential is null) return Results.NotFound();
+        var credential = await _credentials.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId);
+        if (credential is null) return ServiceResult<PlatformCredentialResponse>.NotFound();
 
         credential.Platform = request.Platform;
         credential.AccountEmail = request.AccountEmail;
@@ -56,30 +62,62 @@ public sealed class PlatformCredentialService
         }
         credential.UpdatedAt = DateTimeOffset.UtcNow;
 
-        await _db.SaveChangesAsync();
-        return Results.Ok(ToResponse(credential));
+        await _unitOfWork.SaveChangesAsync();
+        return ServiceResult<PlatformCredentialResponse>.Ok(ToResponse(credential));
     }
 
-    public async Task<IResult> DeleteAsync(Guid userId, Guid id)
+    public async Task<ServiceResult<PlatformCredentialResponse>> DeleteAsync(Guid userId, Guid id)
     {
-        var credential = await _db.PlatformCredentials.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId);
-        if (credential is null) return Results.NotFound();
+        var credential = await _credentials.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId);
+        if (credential is null) return ServiceResult<PlatformCredentialResponse>.NotFound();
 
-        _db.PlatformCredentials.Remove(credential);
-        await _db.SaveChangesAsync();
-        return Results.NoContent();
+        _credentials.Remove(credential);
+        await _unitOfWork.SaveChangesAsync();
+        return ServiceResult<PlatformCredentialResponse>.NoContent();
     }
 
     public async Task<List<AgentPlatformCredentialResponse>> ListForAgentAsync(Guid userId)
     {
-        var credentials = await _db.PlatformCredentials
-            .Where(x => x.UserId == userId && x.IsActive)
-            .OrderBy(x => x.Platform)
-            .ToListAsync();
+        var credentials = await _credentials.ListAsync(x => x.UserId == userId && x.IsActive);
+        var result = new List<AgentPlatformCredentialResponse>();
+        var migrated = false;
 
-        return credentials
-            .Select(x => new AgentPlatformCredentialResponse(x.Platform, x.AccountEmail, SecretProtector.Unprotect(x.EncryptedPassword, _configuration)))
-            .ToList();
+        foreach (var credential in credentials.OrderBy(x => x.Platform))
+        {
+            if (!SecretProtector.TryUnprotect(credential.EncryptedPassword, _configuration, out var password, out var matchedKeyLabel))
+            {
+                _logger.LogWarning(
+                    "Falha ao decriptar a credencial {CredentialId} ({Platform}) do usuário {UserId}. " +
+                    "Nenhuma chave de proteção conhecida funcionou.",
+                    credential.Id, credential.Platform, userId);
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(password))
+            {
+                _logger.LogWarning(
+                    "Credencial {CredentialId} ({Platform}) do usuário {UserId} sem senha utilizável; ignorada.",
+                    credential.Id, credential.Platform, userId);
+                continue;
+            }
+
+            if (matchedKeyLabel is "Auth:JwtKey")
+            {
+                credential.EncryptedPassword = SecretProtector.Protect(password, _configuration);
+                credential.UpdatedAt = DateTimeOffset.UtcNow;
+                migrated = true;
+                _logger.LogInformation(
+                    "Credencial {CredentialId} ({Platform}) re-cifrada com a chave atual após decriptação legada.",
+                    credential.Id, credential.Platform);
+            }
+
+            result.Add(new AgentPlatformCredentialResponse(credential.Platform, credential.AccountEmail, password));
+        }
+
+        if (migrated)
+            await _unitOfWork.SaveChangesAsync();
+
+        return result;
     }
 
     private static PlatformCredentialResponse ToResponse(PlatformCredential credential) =>

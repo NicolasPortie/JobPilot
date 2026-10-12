@@ -1,34 +1,69 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$root = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "lib\dev-common.ps1")
 
-Write-Host "Starting PostgreSQL..."
-docker compose -f (Join-Path $root "infra\docker-compose.yml") up -d
+Set-JobPilotDevEnvironment
+$status = Get-JobPilotDevStatus
+Write-JobPilotDevStatus -Status $status
 
-Write-Host "Starting API on http://localhost:5000..."
-$env:ASPNETCORE_ENVIRONMENT = "Development"
-if ([string]::IsNullOrWhiteSpace($env:KIMI_API_KEY)) {
-  $env:KIMI_API_KEY = [Environment]::GetEnvironmentVariable("KIMI_API_KEY", "User")
+if ($status.Ready -and $status.Web.Healthy) {
+  Write-Host "Nada a fazer: stack ja esta no ar."
+  exit 0
 }
-Start-Process -FilePath "dotnet" `
-  -ArgumentList "run --project apps\api" `
-  -WorkingDirectory $root `
-  -WindowStyle Hidden
 
-Start-Sleep -Seconds 5
+if (-not $status.Postgres.Healthy) {
+  Write-Host "Subindo PostgreSQL..."
+  docker compose -f $JobPilotComposeFile up -d | Out-Host
 
-Write-Host "Starting Web on http://127.0.0.1:5173..."
-Start-Process -FilePath "npm.cmd" `
-  -ArgumentList "run dev -- --host 127.0.0.1 --port 5173" `
-  -WorkingDirectory (Join-Path $root "apps\web") `
-  -WindowStyle Hidden
+  $postgresDeadline = (Get-Date).AddSeconds(30)
+  while ((Get-Date) -lt $postgresDeadline) {
+    $status = Get-JobPilotDevStatus
+    if ($status.Postgres.Healthy) { break }
+    Start-Sleep -Seconds 1
+  }
 
-Write-Host ""
-Write-Host "JobPilot MVP is starting:"
-Write-Host "  API: http://localhost:5000/health"
-Write-Host "  Web: http://127.0.0.1:5173"
-Write-Host ""
-Write-Host "Login:"
-Write-Host "  admin@jobpilot.local"
-Write-Host "  admin123"
+  $status = Get-JobPilotDevStatus
+  if (-not $status.Postgres.Healthy) {
+    throw "PostgreSQL nao ficou pronto na porta $JobPilotPostgresPort. Rode .\scripts\status.ps1 para diagnosticar."
+  }
+
+  Write-Host "PostgreSQL pronto."
+}
+
+if (-not $status.Api.Healthy) {
+  Write-Host "Subindo API em nova janela..."
+  Start-JobPilotProcessWindow `
+    -Title "JobPilot API" `
+    -WorkingDirectory $JobPilotRoot `
+    -Command "dotnet run --project apps\api"
+
+  if (-not (Wait-JobPilotApiHealth -TimeoutSeconds 60)) {
+    throw "API nao respondeu em $JobPilotApiHealthUrl. Veja a janela 'JobPilot API' para o erro."
+  }
+
+  Write-Host "API pronta."
+}
+
+$status = Get-JobPilotDevStatus
+
+if (-not $status.Web.Healthy) {
+  Write-Host "Subindo Web em nova janela..."
+  Start-JobPilotProcessWindow `
+    -Title "JobPilot Web" `
+    -WorkingDirectory (Join-Path $JobPilotRoot "apps\web") `
+    -Command "npm run dev"
+
+  $webDeadline = (Get-Date).AddSeconds(30)
+  while ((Get-Date) -lt $webDeadline) {
+    if (Test-JobPilotTcpPort -Port $JobPilotWebPort) { break }
+    Start-Sleep -Seconds 1
+  }
+}
+
+$status = Get-JobPilotDevStatus
+Write-JobPilotDevStatus -Status $status
+
+if (-not $status.Ready) {
+  exit 1
+}

@@ -5,7 +5,7 @@ using JobPilot.Agent.Domain;
 
 namespace JobPilot.Agent.Infrastructure;
 
-public sealed class JobPilotApiClient
+public sealed class JobPilotApiClient : IDisposable
 {
     private readonly HttpClient _http;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -34,7 +34,6 @@ public sealed class JobPilotApiClient
     public async Task<AgentTaskResponse?> GetNextTaskAsync()
     {
         var response = await _http.GetAsync("api/agent/tasks/next");
-        Console.WriteLine($"[DEBUG] GetNextTaskAsync status: {response.StatusCode}, base: {_http.BaseAddress}");
         if (response.StatusCode == System.Net.HttpStatusCode.NoContent) return null;
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<AgentTaskResponse>(JsonOptions);
@@ -93,8 +92,13 @@ public sealed class JobPilotApiClient
     public async Task<List<PlatformCredential>?> GetPlatformCredentialsAsync()
     {
         var response = await _http.GetAsync("api/agent/platform-credentials");
-        if (!response.IsSuccessStatusCode) return null;
-        return await response.Content.ReadFromJsonAsync<List<PlatformCredential>>(JsonOptions);
+        if (!response.IsSuccessStatusCode)
+        {
+            Console.WriteLine($"[Credentials] GET platform-credentials falhou: HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<List<PlatformCredential>>(JsonOptions) ?? [];
     }
 
     // ── LLM Decision Endpoints ──
@@ -307,12 +311,14 @@ public sealed class JobPilotApiClient
     {
         try
         {
-            var response = await _http.PostAsJsonAsync("api/agent/auto-queue", new {}, JsonOptions);
+            var response = await _http.PostAsJsonAsync("api/agent/auto-queue", new { }, JsonOptions);
             if (!response.IsSuccessStatusCode) return null;
             return await response.Content.ReadFromJsonAsync<AutoQueueResponse>(JsonOptions);
         }
         catch { return null; }
     }
+
+    public void Dispose() => _http.Dispose();
 }
 
 public sealed record AutoQueueResponse(int Queued, int Total);

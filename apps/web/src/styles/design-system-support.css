@@ -1,0 +1,215 @@
+/* Shared states and migration compatibility for the older screens. */
+.jp-alert {
+  display: flex;
+  gap: 0.75rem;
+  border-radius: var(--jp-radius-md);
+  border: 1px solid var(--jp-border);
+  padding: 0.875rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.jp-alert--amber {
+  border-color: #fde68a;
+  background: var(--jp-warning-bg);
+  color: #92400e;
+}
+
+.jp-alert--red {
+  border-color: #fecaca;
+  background: var(--jp-danger-bg);
+  color: #991b1b;
+}
+
+.jp-alert--blue {
+  border-color: #dbeafe;
+  background: var(--jp-info-bg);
+  color: #1e40af;
+}
+
+.jp-alert--green {
+  border-color: #bbf7d0;
+  background: var(--jp-success-bg);
+  color: #166534;
+}
+
+.jp-alert--teal {
+  border-color: var(--jp-primary-100);
+  background: var(--jp-primary-50);
+  color: var(--jp-primary-700);
+}
+
+.jp-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.875rem;
+  border-radius: 999px;
+  border: 1px solid var(--jp-border);
+  padding: 0 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  transition: var(--jp-transition-fast);
+}
+
+.jp-chip--inactive {
+  background: #ffffff;
+  color: var(--jp-text-secondary);
+}
+
+.jp-chip--inactive:hover {
+  border-color: var(--jp-border-strong);
+  color: var(--jp-text-primary);
+}
+
+.jp-chip--active {
+  border-color: var(--jp-primary-600);
+  background: var(--jp-primary-600);
+  color: #ffffff;
+}
+
+.jp-status-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+}
+
+.jp-status-dot--green { background: var(--jp-success); }
+.jp-status-dot--amber { background: var(--jp-warning); }
+.jp-status-dot--red { background: var(--jp-danger); }
+.jp-status-dot--blue { background: var(--jp-info); }
+
+.jp-section-title {
+  font-size: 0.82rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--jp-text-tertiary);
+}
+
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+th {
+  color: var(--jp-text-tertiary);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+td {
+  border-top: 1px solid var(--jp-border);
+  color: var(--jp-text-secondary);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c9d4e1;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9facbd;
+}
+
+::selection {
+  background: var(--jp-primary-100);
+  color: var(--jp-primary-700);
+}
+
+/* Older surfaces still use raw Tailwind colors while their migration lands. */
+.bg-blue-600 {
+  background: var(--jp-gradient-primary) !important;
+  border-color: transparent !important;
+  box-shadow: var(--jp-shadow-primary), inset 0 1px 0 rgb(255 255 255 / 0.22) !important;
+  color: #ffffff !important;
+}
+
+button.bg-blue-600,
+button.bg-teal-700,
+a.bg-blue-600 {
+  min-height: 2.5rem;
+  border-radius: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease, color 160ms ease !important;
+}
+
+button.bg-blue-600:hover:not(:disabled),
+button.bg-teal-700:hover:not(:disabled),
+a.bg-blue-600:hover {
+  transform: translateY(-1px);
+}
+
+button.bg-blue-600:active:not(:disabled),
+button.bg-teal-700:active:not(:disabled),
+a.bg-blue-600:active {
+  background: linear-gradient(135deg, #0d8275 0%, #0b605a 50%, #0b6f88 100%) !important;
+  box-shadow: 0 1px 2px rgb(15 118 110 / 0.24) !important;
+}
+
+button.bg-blue-600:disabled,
+button.bg-teal-700:disabled {
+  opacity: 0.56;
+  box-shadow: none !important;
+}
+
+.hover\:bg-blue-700:hover {
+  background: linear-gradient(135deg, #10a99c 0%, #0f8077 48%, #0e8aaa 100%) !important;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.12), 0 14px 30px rgb(13 148 136 / 0.42), inset 0 1px 0 rgb(255 255 255 / 0.28) !important;
+}
+
+.bg-blue-50 { background-color: var(--jp-primary-50) !important; }
+.text-blue-600,
+.text-blue-700 { color: var(--jp-primary-700) !important; }
+.border-blue-200,
+.border-blue-300 { border-color: var(--jp-primary-100) !important; }
+.border-blue-400,
+.border-blue-500,
+.border-blue-600 { border-color: var(--jp-primary-600) !important; }
+.ring-blue-100,
+.ring-blue-200 { --tw-ring-color: rgb(15 118 110 / 0.18) !important; }
+.focus\:border-blue-500:focus { border-color: var(--jp-primary-600) !important; }
+.focus\:ring-blue-100:focus { --tw-ring-color: rgb(15 118 110 / 0.16) !important; }
+.shadow-blue-600\/20 { --tw-shadow-color: rgb(15 118 110 / 0.2) !important; }
+
+button.rounded-lg.border.border-slate-300.bg-white,
+button.rounded-xl.border.border-slate-200.bg-white,
+button.border.border-slate-300.bg-white,
+button.border.border-slate-200.bg-white,
+a.rounded-lg.border.border-slate-300.bg-white {
+  background: var(--jp-surface) !important;
+  border-color: var(--jp-border) !important;
+  box-shadow: var(--jp-shadow-xs) !important;
+  border-radius: 10px !important;
+  font-weight: 700;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease, color 160ms ease !important;
+}
+
+button.rounded-lg.border.border-slate-300.bg-white:hover,
+button.rounded-xl.border.border-slate-200.bg-white:hover,
+button.border.border-slate-300.bg-white:hover,
+button.border.border-slate-200.bg-white:hover,
+a.rounded-lg.border.border-slate-300.bg-white:hover {
+  background: var(--jp-surface-subtle) !important;
+  border-color: var(--jp-border-strong) !important;
+  box-shadow: var(--jp-shadow-sm) !important;
+  transform: translateY(-1px);
+}
+
+.rounded-xl.border.border-slate-200.bg-white.shadow-sm,
+.overflow-hidden.rounded-xl.border.border-slate-200.bg-white.shadow-sm {
+  background: var(--jp-surface);
+  box-shadow: var(--jp-shadow-xs) !important;
+}

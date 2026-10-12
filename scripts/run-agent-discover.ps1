@@ -1,6 +1,6 @@
 param(
-  [string]$Keywords = "ASP.NET junior remote",
-  [string]$Location = "Brazil",
+  [string]$Keywords = "",
+  [string]$Location = "",
   [int]$Limit = 25
 )
 
@@ -8,6 +8,11 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
+$legacyRuntime = [Environment]::GetEnvironmentVariable("JOBPILOT_ENABLE_LEGACY_RUNTIME", "Process")
+if ($legacyRuntime -ne "true") {
+  throw "O runtime legado esta desativado. Use o painel web para salvar um foco e trazer a vaga manualmente."
+}
+
 $token = [Environment]::GetEnvironmentVariable("JOBPILOT_AGENT_TOKEN", "User")
 $apiUrl = [Environment]::GetEnvironmentVariable("JOBPILOT_API_URL", "User")
 $browserDriver = [Environment]::GetEnvironmentVariable("JOBPILOT_BROWSER_DRIVER", "User")

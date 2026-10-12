@@ -1,35 +1,32 @@
-using JobPilot.Api.Data;
+using JobPilot.Api.Application;
 using JobPilot.Api.Domain;
+using JobPilot.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace JobPilot.Api.Services;
 
-public sealed class ApplicationRunService
+public sealed class ApplicationRunService(
+    IRepository<CandidateProfile> profiles,
+    IRepository<JobLead> jobLeads,
+    IRepository<ApplicationRun> runs,
+    IUnitOfWork unitOfWork,
+    JobFilterService filterService,
+    ScoringService scoring,
+    ApplicationResumePreparationService resumePreparation)
 {
-    private readonly JobPilotDbContext _db;
-    private readonly JobFilterService _filterService;
-    private readonly ScoringService _scoring;
-    private readonly ApplicationResumePreparationService _resumePreparation;
-
-    public ApplicationRunService(JobPilotDbContext db, JobFilterService filterService, ScoringService scoring, ApplicationResumePreparationService resumePreparation)
+    public async Task<ServiceResult<ApplicationRunCreationResult>> CreateAsync(Guid userId, CreateRunRequest request)
     {
-        _db = db;
-        _filterService = filterService;
-        _scoring = scoring;
-        _resumePreparation = resumePreparation;
-    }
-
-    public async Task<IResult> CreateAsync(Guid userId, CreateRunRequest request)
-    {
-        var profile = await _db.CandidateProfiles.FirstOrDefaultAsync(x => x.UserId == userId);
-        var filter = await _filterService.GetOrCreateAsync(userId);
-        var jobs = await _db.JobLeads.Where(x => x.UserId == userId && request.JobLeadIds.Contains(x.Id)).ToListAsync();
+        var profile = await profiles.Query().FirstOrDefaultAsync(x => x.UserId == userId);
+        var filter = await filterService.GetOrCreateAsync(userId);
+        var jobs = await jobLeads.Query()
+            .Where(x => x.UserId == userId && request.JobLeadIds.Contains(x.Id))
+            .ToListAsync();
         var queueable = new List<JobLead>();
 
         foreach (var lead in jobs)
         {
-            _scoring.Score(lead, profile, filter);
-            if (_filterService.ShouldIgnore(lead, filter, out var reason))
+            scoring.Score(lead, profile, filter);
+            if (filterService.ShouldIgnore(lead, filter, out var reason))
             {
                 lead.Status = JobStatuses.Ignored;
                 lead.FilteredReason = reason;
@@ -40,26 +37,48 @@ public sealed class ApplicationRunService
             lead.FilteredReason = "";
         }
 
-        var run = new ApplicationRun { Id = Guid.NewGuid(), UserId = userId, Name = request.Name, TotalJobs = queueable.Count };
+        var run = new ApplicationRun
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Name = request.Name,
+            TotalJobs = queueable.Count
+        };
         var queuedTaskIds = new List<Guid>();
         foreach (var lead in queueable)
         {
             lead.Status = JobStatuses.QueuedToApply;
             var taskId = Guid.NewGuid();
             queuedTaskIds.Add(taskId);
-            run.Jobs.Add(new ApplicationJob { Id = taskId, UserId = userId, JobLeadId = lead.Id, JobUrl = lead.Url, State = JobStatuses.QueuedToApply });
+            run.Jobs.Add(new ApplicationJob
+            {
+                Id = taskId,
+                UserId = userId,
+                JobLeadId = lead.Id,
+                JobUrl = lead.Url,
+                State = JobStatuses.QueuedToApply
+            });
         }
 
-        _db.ApplicationRuns.Add(run);
-        await _db.SaveChangesAsync();
-        await _resumePreparation.PrepareQueuedAsync(userId, queuedTaskIds);
-        return Results.Created($"/api/runs/{run.Id}", new { run, queued = queueable.Count, ignored = jobs.Count - queueable.Count });
+        await using var transaction = await unitOfWork.BeginTransactionAsync();
+
+        runs.Add(run);
+        await unitOfWork.SaveChangesAsync();
+        await unitOfWork.CommitAsync();
+
+        await resumePreparation.PrepareQueuedAsync(userId, queuedTaskIds);
+        return ServiceResult<ApplicationRunCreationResult>.Created(
+            new ApplicationRunCreationResult(ApplicationRunResponse.From(run), queueable.Count, jobs.Count - queueable.Count));
     }
 
-    public async Task<List<ApplicationRun>> ListAsync(Guid userId) =>
-        await _db.ApplicationRuns
+    public async Task<List<ApplicationRunResponse>> ListAsync(Guid userId) =>
+        (await runs.Query()
             .Include(x => x.Jobs)
             .Where(x => x.UserId == userId)
             .OrderByDescending(x => x.CreatedAt)
-            .ToListAsync();
+            .ToListAsync())
+        .Select(ApplicationRunResponse.From)
+        .ToList();
 }
+
+public sealed record ApplicationRunCreationResult(ApplicationRunResponse Run, int Queued, int Ignored);

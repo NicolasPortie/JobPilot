@@ -1,28 +1,28 @@
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-using JobPilot.Api.Data;
 using JobPilot.Api.Domain;
+using JobPilot.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace JobPilot.Api.Services;
 
-public class AnswerResolver(JobPilotDbContext db)
+public class AnswerResolver(IRepository<QuestionPattern> patterns, IUnitOfWork unitOfWork)
 {
     public async Task<ResolvedAnswer> ResolveAsync(Guid userId, string questionText, string fieldContext, CandidateProfile? profile)
     {
-        var patterns = await db.QuestionPatterns
+        var allPatterns = await patterns.Query()
             .Where(x => x.UserId == userId)
             .OrderByDescending(x => x.UseCount)
             .ToListAsync();
 
-        if (patterns.Count == 0)
+        if (allPatterns.Count == 0)
         {
             return new ResolvedAnswer("", "no_patterns", 0m, "Nenhum pattern cadastrado.");
         }
 
         var normalizedQuestion = Normalize(questionText);
-        var bestMatch = patterns
+        var bestMatch = allPatterns
             .Select(p => new { Pattern = p, Score = MatchScore(normalizedQuestion, p) })
             .OrderByDescending(x => x.Score)
             .FirstOrDefault();
@@ -47,7 +47,7 @@ public class AnswerResolver(JobPilotDbContext db)
             {
                 pattern.UseCount++;
                 pattern.UpdatedAt = DateTimeOffset.UtcNow;
-                await db.SaveChangesAsync();
+                await unitOfWork.SaveChangesAsync();
                 return new ResolvedAnswer(answer, "profile_template", confidence, $"Pattern '{pattern.PatternKey}' preenchido com dados do perfil.");
             }
         }
@@ -59,7 +59,7 @@ public class AnswerResolver(JobPilotDbContext db)
             {
                 pattern.UseCount++;
                 pattern.UpdatedAt = DateTimeOffset.UtcNow;
-                await db.SaveChangesAsync();
+                await unitOfWork.SaveChangesAsync();
                 return new ResolvedAnswer(answer, "reusable_template", confidence, $"Pattern '{pattern.PatternKey}' com template fixo.");
             }
         }

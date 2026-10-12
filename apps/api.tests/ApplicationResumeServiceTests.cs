@@ -29,7 +29,7 @@ public class ApplicationResumeServiceTests
         db.ResumeExports.Add(new ResumeExport { Id = exportId, UserId = userId, ResumeVersionId = versionId, Format = "txt", FilePath = exportPath, ParseText = "Curriculo ATS" });
         await db.SaveChangesAsync();
 
-        var service = new ApplicationResumeService(db);
+        var service = TestServices.ApplicationResumeService(db);
         var result = await service.AssignAsync(userId, taskId, new ApplicationJobResumeRequest(versionId, exportId));
 
         Assert.Equal(taskId, result.ApplicationJobId);
@@ -68,7 +68,7 @@ public class ApplicationResumeServiceTests
         db.ResumeExports.Add(new ResumeExport { Id = exportId, UserId = userId, ResumeVersionId = otherVersionId, Format = "txt", FilePath = exportPath, ParseText = "Outro" });
         await db.SaveChangesAsync();
 
-        var service = new ApplicationResumeService(db);
+        var service = TestServices.ApplicationResumeService(db);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.AssignAsync(userId, taskId, new ApplicationJobResumeRequest(versionId, exportId)));
     }
@@ -96,7 +96,7 @@ public class ApplicationResumeServiceTests
         db.ResumeExports.Add(new ResumeExport { Id = exportId, UserId = otherUserId, ResumeVersionId = versionId, Format = "txt", FilePath = exportPath, ParseText = "Curriculo ATS" });
         await db.SaveChangesAsync();
 
-        var service = new ApplicationResumeService(db);
+        var service = TestServices.ApplicationResumeService(db);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.AssignAsync(userId, taskId, new ApplicationJobResumeRequest(versionId, exportId)));
     }
@@ -122,7 +122,7 @@ public class ApplicationResumeServiceTests
         db.ResumeExports.Add(new ResumeExport { Id = exportId, UserId = userId, ResumeVersionId = versionId, Format = "txt", FilePath = exportPath, ParseText = "Curriculo ATS" });
         await db.SaveChangesAsync();
 
-        var service = new ApplicationResumeService(db);
+        var service = TestServices.ApplicationResumeService(db);
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => service.AssignAsync(userId, taskId, new ApplicationJobResumeRequest(versionId, exportId)));
         Assert.Contains("Arquivo exportado", error.Message);
@@ -142,7 +142,7 @@ public class ApplicationResumeServiceTests
         db.ResumeVersions.Add(new ResumeVersion { Id = versionId, UserId = userId, ResumeDocumentId = documentId, Title = "Base", PlainText = "Curriculo ATS" });
         await db.SaveChangesAsync();
 
-        var service = new ApplicationResumeService(db);
+        var service = TestServices.ApplicationResumeService(db);
         var result = await service.AssignToJobLeadAsync(userId, leadId, new ApplicationJobResumeRequest(versionId));
 
         Assert.Equal(versionId, result.ResumeVersionId);

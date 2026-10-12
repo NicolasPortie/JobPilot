@@ -19,7 +19,9 @@ public class AiChatServiceTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Auth:JwtKey"] = "test-secret-key-with-enough-length-32"
+                ["Auth:JwtKey"] = "test-secret-key-with-enough-length-32",
+                ["Security:SecretKey"] = "test-data-key-with-enough-length-32",
+                ["Ai:AllowedHosts"] = "ai.example.test,api.openai.test"
             })
             .Build();
         var provider = new AiProvider
@@ -58,7 +60,7 @@ public class AiChatServiceTests
                     """)
             };
         }));
-        var service = new AiChatService(http, configuration, db, NullLogger<AiChatService>.Instance, new AnswerResolver(db), new ResumeTextService());
+        var service = TestServices.AiChatService(http, configuration, db);
 
         var result = await service.AnalyzeResumeProfileAsync(userId, "Nicolas Portie C# .NET", "", null);
 
@@ -80,7 +82,9 @@ public class AiChatServiceTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Auth:JwtKey"] = "test-secret-key-with-enough-length-32"
+                ["Auth:JwtKey"] = "test-secret-key-with-enough-length-32",
+                ["Security:SecretKey"] = "test-data-key-with-enough-length-32",
+                ["Ai:AllowedHosts"] = "ai.example.test,api.openai.test"
             })
             .Build();
         db.AiProviders.Add(new AiProvider
@@ -122,7 +126,7 @@ public class AiChatServiceTests
                     """)
             };
         }));
-        var service = new AiChatService(http, configuration, db, NullLogger<AiChatService>.Instance, new AnswerResolver(db), new ResumeTextService());
+        var service = TestServices.AiChatService(http, configuration, db);
 
         var result = await service.ExtractJobRequirementsFromAttachmentsAsync(
             userId,

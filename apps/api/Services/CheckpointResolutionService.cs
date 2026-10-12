@@ -1,34 +1,28 @@
-using JobPilot.Api.Data;
+using JobPilot.Api.Application;
 using JobPilot.Api.Domain;
-using Microsoft.EntityFrameworkCore;
+using JobPilot.Api.Infrastructure.Persistence;
 
 namespace JobPilot.Api.Services;
 
-public sealed class CheckpointResolutionService
+public sealed class CheckpointResolutionService(
+    IRepository<Checkpoint> checkpoints,
+    IUnitOfWork unitOfWork,
+    ReusableAnswerService answers)
 {
-    private readonly JobPilotDbContext _db;
-    private readonly ReusableAnswerService _answers;
-
-    public CheckpointResolutionService(JobPilotDbContext db, ReusableAnswerService answers)
+    public async Task<ServiceResult<CheckpointResponse>> ResolveAsync(Guid userId, Guid checkpointId, ResolveCheckpointRequest request)
     {
-        _db = db;
-        _answers = answers;
-    }
-
-    public async Task<Checkpoint?> ResolveAsync(Guid userId, Guid checkpointId, ResolveCheckpointRequest request)
-    {
-        var checkpoint = await _db.Checkpoints.FirstOrDefaultAsync(x => x.Id == checkpointId && x.UserId == userId);
-        if (checkpoint is null) return null;
+        var checkpoint = await checkpoints.FirstOrDefaultAsync(x => x.Id == checkpointId && x.UserId == userId);
+        if (checkpoint is null) return ServiceResult<CheckpointResponse>.NotFound();
 
         checkpoint.ResolutionStatus = request.Action;
         checkpoint.ResolutionValue = request.Value;
         checkpoint.ResolvedAt = DateTimeOffset.UtcNow;
 
         if (ShouldPersistCheckpointAnswer(checkpoint, request))
-            await _answers.UpsertScreeningAnswerAsync(userId, checkpoint.FieldLabel, request.Value!.Trim());
+            await answers.UpsertScreeningAnswerAsync(userId, checkpoint.FieldLabel, request.Value!.Trim());
 
-        await _db.SaveChangesAsync();
-        return checkpoint;
+        await unitOfWork.SaveChangesAsync();
+        return ServiceResult<CheckpointResponse>.Ok(CheckpointResponse.From(checkpoint));
     }
 
     private static bool ShouldPersistCheckpointAnswer(Checkpoint checkpoint, ResolveCheckpointRequest request)

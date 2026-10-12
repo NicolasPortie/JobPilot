@@ -1,27 +1,22 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
-using JobPilot.Api.Data;
 using JobPilot.Api.Domain;
-using Microsoft.EntityFrameworkCore;
+using JobPilot.Api.Infrastructure.Persistence;
 
 namespace JobPilot.Api.Services;
 
-public sealed class ReusableAnswerService
+public sealed class ReusableAnswerService(IRepository<ReusableAnswer> answers)
 {
-    private readonly JobPilotDbContext _db;
-
-    public ReusableAnswerService(JobPilotDbContext db) => _db = db;
-
     public async Task UpsertScreeningAnswerAsync(Guid userId, string questionText, string answerValue)
     {
         var key = StableQuestionKey(questionText);
-        var existing = await _db.ReusableAnswers.FirstOrDefaultAsync(x =>
+        var existing = await answers.FirstOrDefaultAsync(x =>
             x.UserId == userId &&
             (x.QuestionKey == key || x.QuestionText == questionText));
 
         if (existing is null)
         {
-            _db.ReusableAnswers.Add(new ReusableAnswer
+            answers.Add(new ReusableAnswer
             {
                 Id = Guid.NewGuid(),
                 UserId = userId,

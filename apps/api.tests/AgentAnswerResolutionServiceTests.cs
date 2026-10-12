@@ -21,7 +21,7 @@ public class AgentAnswerResolutionServiceTests
         });
         await db.SaveChangesAsync();
         var ai = new FakeAiChatService();
-        var service = new AgentAnswerResolutionService(db, new AnswerResolver(db), ai);
+        var service = TestServices.AgentAnswerResolutionService(db, ai);
         var request = new ResolveAgentAnswerRequest(
             Guid.NewGuid(),
             "Quantos anos voce trabalha com Java?",

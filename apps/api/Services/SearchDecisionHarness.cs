@@ -41,41 +41,41 @@ public static class SearchDecisionHarness
         var prompt = $$"""
             Candidate profile:
             {{JsonSerializer.Serialize(new
-            {
-                profile?.TargetRole,
-                profile?.Seniority,
-                Skills = profile?.Skills ?? [],
-                profile?.City,
-                profile?.Country,
-                profile?.ProfessionalSummary
-            }, jsonOptions)}}
+        {
+            profile?.TargetRole,
+            profile?.Seniority,
+            Skills = profile?.Skills ?? [],
+            profile?.City,
+            profile?.Country,
+            profile?.ProfessionalSummary
+        }, jsonOptions)}}
 
             Search filters:
             {{JsonSerializer.Serialize(new
-            {
-                filter.AllowedSeniorities,
-                filter.BlockedSeniorities,
-                filter.AllowedRoleKeywords,
-                filter.BlockedRoleKeywords,
-                filter.AllowedWorkplaceTypes,
-                filter.BlockedWorkplaceTypes,
-                filter.AllowedApplyTypes,
-                filter.MinScore
-            }, jsonOptions)}}
+        {
+            filter.AllowedSeniorities,
+            filter.BlockedSeniorities,
+            filter.AllowedRoleKeywords,
+            filter.BlockedRoleKeywords,
+            filter.AllowedWorkplaceTypes,
+            filter.BlockedWorkplaceTypes,
+            filter.AllowedApplyTypes,
+            filter.MinScore
+        }, jsonOptions)}}
 
             Discovered job:
             {{JsonSerializer.Serialize(new
-            {
-                lead.Title,
-                lead.Company,
-                lead.Location,
-                lead.Description,
-                lead.Url,
-                lead.Platform,
-                lead.IsRemote,
-                RuleScore = lead.Score,
-                RuleReason = lead.ScoreReason
-            }, jsonOptions)}}
+        {
+            lead.Title,
+            lead.Company,
+            lead.Location,
+            lead.Description,
+            lead.Url,
+            lead.Platform,
+            lead.IsRemote,
+            RuleScore = lead.Score,
+            RuleReason = lead.ScoreReason
+        }, jsonOptions)}}
 
             Decision rules:
             - decision=queue only when fitScore >= 60 and confidence >= 0.60.

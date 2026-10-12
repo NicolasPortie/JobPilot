@@ -1,27 +1,17 @@
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using JobPilot.Api.Data;
 using JobPilot.Api.Domain;
 using Microsoft.EntityFrameworkCore;
 
 namespace JobPilot.Api.Services;
 
-public sealed class JobTargetService(JobPilotDbContext db, IAiChatService ai, HttpClient http, ResumeOcrService ocr)
+public sealed class JobTargetService(JobPilotDbContext db, IAiChatService ai, ResumeOcrService ocr, JobTargetUrlExtractionService urlExtraction)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-    private static readonly HashSet<string> AllowedScreenshotExtensions = new(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".pdf" };
-    private static readonly string[] KnownTech =
-    [
-        "C#", ".NET", "ASP.NET Core", "Entity Framework", "SQL", "PostgreSQL", "MySQL",
-        "JavaScript", "TypeScript", "React", "Angular", "Vue", "Node.js", "Java",
-        "Spring Boot", "API REST", "REST", "Docker", "Kubernetes", "Git", "GitHub",
-        "Azure", "AWS", "GCP", "Selenium", "Playwright", "QA", "Testes"
-    ];
-
-    public async Task<JobTargetDetail> OrganizeAsync(Guid userId, OrganizeJobTargetRequest request)
+    public async Task<JobTargetDetail> OrganizeAsync(Guid userId, OrganizeJobTargetRequest request, string? storedImagePath = null)
     {
-        var source = await ResolveSourceAsync(userId, request);
+        var source = await ResolveSourceAsync(userId, request, storedImagePath);
         if ((string.IsNullOrWhiteSpace(source.Text) || source.Text.Trim().Length < 80) && source.Attachments.Length == 0)
             throw new InvalidOperationException("Texto da vaga insuficiente para organizar requisitos.");
 
@@ -40,8 +30,9 @@ public sealed class JobTargetService(JobPilotDbContext db, IAiChatService ai, Ht
                 : await ai.ExtractJobRequirementsAsync(userId, input);
         }
 
-        extraction ??= BuildDeterministicExtraction(source);
-        extraction = NormalizeExtraction(extraction, source);
+        extraction ??= JobTargetAnalyzer.BuildDeterministicExtraction(source);
+        extraction = JobTargetAnalyzer.EnrichWithDeterministicRequirements(extraction, source);
+        extraction = JobTargetAnalyzer.NormalizeExtraction(extraction, source);
 
         var now = DateTimeOffset.UtcNow;
         var target = new JobTarget
@@ -95,73 +86,41 @@ public sealed class JobTargetService(JobPilotDbContext db, IAiChatService ai, Ht
         return target is null ? null : ToDetail(target);
     }
 
-    public async Task<JobTargetDetail> OrganizeScreenshotAsync(Guid userId, IFormFile file, bool useAi)
+    public Task<JobTargetDetail> OrganizeStoredImageAsync(Guid userId, string storedPath, bool useAi) =>
+        OrganizeAsync(userId, new OrganizeJobTargetRequest("image_ocr", null, null, useAi), storedPath);
+
+    private async Task<ResolvedJobSource> ResolveSourceAsync(Guid userId, OrganizeJobTargetRequest request, string? storedImagePath = null)
     {
-        if (file.Length <= 0) throw new InvalidOperationException("Arquivo vazio.");
-        if (file.Length > 12 * 1024 * 1024) throw new InvalidOperationException("Screenshot maior que 12MB.");
-
-        var extension = Path.GetExtension(file.FileName);
-        if (!AllowedScreenshotExtensions.Contains(extension))
-            throw new InvalidOperationException("Formato nao suportado. Use PNG, JPG, WEBP, TIFF, BMP ou PDF.");
-
-        var uploadRoot = Path.Combine(Directory.GetCurrentDirectory(), "documents", "job-screenshots");
-        var userDir = Path.Combine(uploadRoot, userId.ToString("N"));
-        Directory.CreateDirectory(userDir);
-
-        var safeName = MakeSafeFileName(Path.GetFileNameWithoutExtension(file.FileName));
-        var fileName = $"{DateTimeOffset.UtcNow:yyyyMMddHHmmss}-{safeName}{extension.ToLowerInvariant()}";
-        var fullPath = Path.Combine(userDir, fileName);
-
-        await using (var stream = File.Create(fullPath))
-        {
-            await file.CopyToAsync(stream);
-        }
-
-        return await OrganizeAsync(userId, new OrganizeJobTargetRequest(null, "image_ocr", null, null, fullPath, useAi));
-    }
-
-    private async Task<ResolvedJobSource> ResolveSourceAsync(Guid userId, OrganizeJobTargetRequest request)
-    {
-        if (request.JobLeadId is { } jobLeadId)
-        {
-            var lead = await db.JobLeads.FirstOrDefaultAsync(x => x.Id == jobLeadId && x.UserId == userId)
-                ?? throw new InvalidOperationException("Vaga nao encontrada.");
-            return new ResolvedJobSource(
-                "job_lead",
-                $"{lead.Title}\n{lead.Company}\n{lead.Location}\n{lead.Description}",
-                lead.Url,
-                lead.Title,
-                lead.Company,
-                lead.Location,
-                lead.Id,
-                []);
-        }
-
         var kind = NormalizeSourceKind(request.SourceKind);
         if (kind == "image_ocr")
         {
-            if (string.IsNullOrWhiteSpace(request.ImagePath) || !File.Exists(request.ImagePath))
-                throw new InvalidOperationException("Imagem nao encontrada ou caminho invalido.");
-            var ocrResult = ocr.RunOcr(request.ImagePath);
-            var attachment = BuildAttachment(request.ImagePath);
+            if (string.IsNullOrWhiteSpace(storedImagePath) ||
+                !IsTrustedImagePath(userId, storedImagePath) ||
+                !File.Exists(storedImagePath))
+                throw new InvalidOperationException("Imagem não encontrada ou caminho inválido.");
+            var ocrResult = ocr.RunOcr(storedImagePath);
+            var attachment = BuildAttachment(storedImagePath);
             if (string.IsNullOrWhiteSpace(ocrResult.Text) && !request.UseAi)
-                throw new InvalidOperationException("Nao foi possivel extrair texto da imagem.");
+                throw new InvalidOperationException("Não foi possível extrair texto da imagem.");
             var sourceText = string.IsNullOrWhiteSpace(ocrResult.Text)
                 ? "Screenshot/PDF de vaga enviado pelo usuario. Extraia os requisitos somente do anexo visual."
                 : ocrResult.Text;
-            return new ResolvedJobSource("image_ocr", sourceText, "", "", "", "", null, attachment is null ? [] : [attachment]);
+            return new ResolvedJobSource("image_ocr", sourceText, "", "", "", "", null, attachment is null ? [] : [attachment], []);
         }
 
         if (kind == "url")
         {
             var url = request.Url?.Trim() ?? "";
-            if (string.IsNullOrWhiteSpace(url))
-                throw new InvalidOperationException("URL da vaga nao informada.");
-            var html = await http.GetStringAsync(url);
-            var text = ExtractTextFromHtml(html);
-            if (string.IsNullOrWhiteSpace(text) || text.Length < 80)
-                throw new InvalidOperationException("Nao foi possivel extrair texto suficiente da URL.");
-            return new ResolvedJobSource("url", text, url, "", "", "", null, []);
+            var manualText = request.Text?.Trim() ?? "";
+            return await urlExtraction.ResolveAsync(url, manualText);
+        }
+
+        if (kind == "browser_capture")
+        {
+            var text = request.Text?.Trim() ?? "";
+            if (text.Length < 500)
+                throw new InvalidOperationException("Captura da vaga insuficiente. Abra a vaga completa no Chrome e tente novamente.");
+            return new ResolvedJobSource("browser_capture", text, request.Url?.Trim() ?? "", "", "", "", null, [], []);
         }
 
         return new ResolvedJobSource(
@@ -172,6 +131,7 @@ public sealed class JobTargetService(JobPilotDbContext db, IAiChatService ai, Ht
             "",
             "",
             null,
+            [],
             []);
     }
 
@@ -189,110 +149,39 @@ public sealed class JobTargetService(JobPilotDbContext db, IAiChatService ai, Ht
             _ => ""
         };
         if (string.IsNullOrWhiteSpace(mediaType)) return null;
+        var info = new FileInfo(path);
+        if (!info.Exists || info.Length > 10 * 1024 * 1024)
+            throw new InvalidOperationException("Anexo de vaga maior que o limite permitido.");
         var bytes = File.ReadAllBytes(path);
         var dataUrl = $"data:{mediaType};base64,{Convert.ToBase64String(bytes)}";
         var type = mediaType == "application/pdf" ? "file" : "image_url";
         return new AiInputAttachment(type, mediaType, dataUrl, Path.GetFileName(path));
     }
 
-    private static string MakeSafeFileName(string value)
+    private static bool IsTrustedImagePath(Guid userId, string path)
     {
-        var chars = (value ?? "")
-            .Normalize(NormalizationForm.FormD)
-            .Where(ch => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch) != System.Globalization.UnicodeCategory.NonSpacingMark)
-            .Select(ch => char.IsLetterOrDigit(ch) ? ch : '-')
-            .ToArray();
-        var collapsed = Regex.Replace(new string(chars), "-+", "-").Trim('-');
-        return string.IsNullOrWhiteSpace(collapsed) ? "vaga" : collapsed[..Math.Min(collapsed.Length, 80)];
-    }
-
-    private static string ExtractTextFromHtml(string html)
-    {
-        // Simple heuristic HTML-to-text extraction
-        var text = System.Text.RegularExpressions.Regex.Replace(html, "<script.*?</script>", "", System.Text.RegularExpressions.RegexOptions.Singleline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        text = System.Text.RegularExpressions.Regex.Replace(text, "<style.*?</style>", "", System.Text.RegularExpressions.RegexOptions.Singleline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        text = System.Text.RegularExpressions.Regex.Replace(text, "<[^>]+>", " ");
-        text = System.Text.RegularExpressions.Regex.Replace(text, "&nbsp;", " ", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        text = System.Text.RegularExpressions.Regex.Replace(text, "&amp;", "&", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        text = System.Text.RegularExpressions.Regex.Replace(text, "&lt;", "<", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        text = System.Text.RegularExpressions.Regex.Replace(text, "&gt;", ">", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        text = System.Text.RegularExpressions.Regex.Replace(text, "\\s+", " ");
-        return text.Trim();
-    }
-
-    private static JobRequirementExtractionResponse BuildDeterministicExtraction(ResolvedJobSource source)
-    {
-        var text = source.Text;
-        var normalized = RemoveDiacritics(text).ToLowerInvariant();
-        var requirements = new List<JobRequirementItem>();
-        var order = 0;
-
-        foreach (var tech in KnownTech.Where(tech => ContainsTerm(normalized, tech)))
+        try
         {
-            requirements.Add(new JobRequirementItem(
-                "technology",
-                tech,
-                LooksMustHave(normalized, tech) ? "must_have" : "nice_to_have",
-                EvidenceAround(text, tech),
-                NormalizeKeyword(tech),
-                [tech]));
-            order++;
-        }
-
-        if (ContainsAny(normalized, ["api", "apis", "rest", "backend"]))
-            requirements.Add(new JobRequirementItem("responsibility", "Desenvolvimento de APIs e integrações", "context", EvidenceAround(text, "API"), "apis-rest", ["APIs", "REST"]));
-        if (ContainsAny(normalized, ["testes", "testing", "qa", "qualidade"]))
-            requirements.Add(new JobRequirementItem("responsibility", "Testes e qualidade de software", "context", EvidenceAround(text, "testes"), "testes", ["testes", "QA"]));
-
-        var warnings = new List<string>();
-        if (requirements.Count == 0) warnings.Add("Poucos requisitos detectados sem IA; revise o texto da vaga.");
-        if (string.IsNullOrWhiteSpace(source.Title)) warnings.Add("Cargo nao foi informado explicitamente no cadastro manual.");
-
-        return new JobRequirementExtractionResponse(
-            source.Title,
-            source.Company,
-            source.Location,
-            DetectSeniority(normalized),
-            DetectWorkplace(normalized),
-            BuildSummary(text),
-            requirements.DistinctBy(x => x.NormalizedKeyword).Take(30).ToArray(),
-            warnings.ToArray(),
-            requirements.Count > 0 ? 0.55m : 0.25m);
-    }
-
-    private static JobRequirementExtractionResponse NormalizeExtraction(JobRequirementExtractionResponse extraction, ResolvedJobSource source)
-    {
-        var requirements = extraction.Requirements
-            .Where(x => !string.IsNullOrWhiteSpace(x.Label))
-            .Select(x => x with
+            var fullPath = Path.GetFullPath(path);
+            var userSegment = userId.ToString("N");
+            var roots = new[]
             {
-                Category = NormalizeOneOf(x.Category, ["technology", "responsibility", "experience", "education", "language", "certification", "domain", "soft_skill", "work_model", "other"], "other"),
-                Importance = NormalizeOneOf(x.Importance, ["must_have", "nice_to_have", "context"], "context"),
-                Label = x.Label.Trim(),
-                EvidenceText = x.EvidenceText.Trim(),
-                NormalizedKeyword = string.IsNullOrWhiteSpace(x.NormalizedKeyword) ? NormalizeKeyword(x.Label) : NormalizeKeyword(x.NormalizedKeyword),
-                ExactPhrases = (x.ExactPhrases ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(8).ToArray()
-            })
-            .DistinctBy(x => $"{x.Category}:{x.NormalizedKeyword}")
-            .Take(50)
-            .ToArray();
+                Path.Combine(Directory.GetCurrentDirectory(), "documents", "job-screenshots", userSegment),
+                Path.Combine(Directory.GetCurrentDirectory(), "storage", "job-target-sources", userSegment)
+            };
 
-        var warnings = (extraction.Warnings ?? []).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).Distinct().ToList();
-        if (requirements.Any(x => string.IsNullOrWhiteSpace(x.EvidenceText)))
-            warnings.Add("Alguns requisitos vieram sem evidencia textual; revise antes de gerar curriculo.");
-
-        return extraction with
+            return roots.Any(root =>
+            {
+                var fullRoot = Path.GetFullPath(root)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                    + Path.DirectorySeparatorChar;
+                return fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase);
+            });
+        }
+        catch
         {
-            Title = FirstNonEmpty(extraction.Title, source.Title),
-            Company = FirstNonEmpty(extraction.Company, source.Company),
-            Location = FirstNonEmpty(extraction.Location, source.Location),
-            Seniority = NormalizeOneOf(extraction.Seniority, ["intern", "junior", "mid", "senior", "lead", "unknown"], DetectSeniority(RemoveDiacritics(source.Text).ToLowerInvariant())),
-            Workplace = NormalizeOneOf(extraction.Workplace, ["remote", "hybrid", "onsite", "unknown"], DetectWorkplace(RemoveDiacritics(source.Text).ToLowerInvariant())),
-            Summary = string.IsNullOrWhiteSpace(extraction.Summary) ? BuildSummary(source.Text) : extraction.Summary.Trim(),
-            Requirements = requirements,
-            Warnings = warnings.ToArray(),
-            Confidence = Math.Clamp(extraction.Confidence, 0m, 1m)
-        };
+            return false;
+        }
     }
 
     private static JobRequirement ToRequirement(Guid userId, Guid targetId, JobRequirementItem item, int order) =>
@@ -341,7 +230,7 @@ public sealed class JobTargetService(JobPilotDbContext db, IAiChatService ai, Ht
     }
 
     private static string NormalizeSourceKind(string value) =>
-        NormalizeOneOf(value, ["manual_text", "job_lead", "url", "image_ocr"], "manual_text");
+        NormalizeOneOf(value, ["manual_text", "url", "image_ocr", "browser_capture"], "manual_text");
 
     private static string NormalizeOneOf(string value, string[] allowed, string fallback)
     {
@@ -349,80 +238,4 @@ public sealed class JobTargetService(JobPilotDbContext db, IAiChatService ai, Ht
         return allowed.Contains(normalized) ? normalized : fallback;
     }
 
-    private static string FirstNonEmpty(params string[] values) => values.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))?.Trim() ?? "";
-
-    private static bool LooksMustHave(string normalizedText, string keyword)
-    {
-        var normalizedKeyword = RemoveDiacritics(keyword).ToLowerInvariant();
-        var index = normalizedText.IndexOf(normalizedKeyword, StringComparison.Ordinal);
-        if (index < 0) return false;
-        var start = Math.Max(0, index - 160);
-        var window = normalizedText[start..Math.Min(normalizedText.Length, index + normalizedKeyword.Length + 160)];
-        return ContainsAny(window, ["obrigatorio", "obrigatoria", "necessario", "necessaria", "requisitos", "must", "required", "experiencia com"]);
-    }
-
-    private static string EvidenceAround(string text, string term)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return "";
-        var normalizedText = RemoveDiacritics(text).ToLowerInvariant();
-        var normalizedTerm = RemoveDiacritics(term).ToLowerInvariant();
-        var index = normalizedText.IndexOf(normalizedTerm, StringComparison.Ordinal);
-        if (index < 0) return text[..Math.Min(text.Length, 180)];
-        var start = Math.Max(0, index - 90);
-        var end = Math.Min(text.Length, index + term.Length + 120);
-        return text[start..end].Trim();
-    }
-
-    private static string BuildSummary(string text)
-    {
-        var cleaned = Regex.Replace(text ?? "", @"\s+", " ").Trim();
-        return cleaned.Length <= 420 ? cleaned : cleaned[..420].Trim();
-    }
-
-    private static string DetectSeniority(string normalized)
-    {
-        if (ContainsAny(normalized, ["estagio", "estagiario", "intern"])) return "intern";
-        if (ContainsAny(normalized, ["junior", "jr", "júnior"])) return "junior";
-        if (ContainsAny(normalized, ["pleno", "mid-level", "mid level"])) return "mid";
-        if (ContainsAny(normalized, ["senior", "sênior", "sr.", "sr "])) return "senior";
-        if (ContainsAny(normalized, ["lead", "principal", "staff", "manager", "coordenador"])) return "lead";
-        return "unknown";
-    }
-
-    private static string DetectWorkplace(string normalized)
-    {
-        if (ContainsAny(normalized, ["remoto", "remota", "remote", "home office", "work from home"])) return "remote";
-        if (ContainsAny(normalized, ["hibrido", "híbrido", "hybrid"])) return "hybrid";
-        if (ContainsAny(normalized, ["presencial", "onsite", "on-site"])) return "onsite";
-        return "unknown";
-    }
-
-    private static bool ContainsAny(string value, IEnumerable<string> terms) => terms.Any(term => ContainsTerm(value, term));
-
-    private static bool ContainsTerm(string normalizedHaystack, string term)
-    {
-        var normalizedTerm = RemoveDiacritics(term.ToLowerInvariant()).Trim();
-        if (string.IsNullOrWhiteSpace(normalizedTerm)) return false;
-        if (normalizedTerm.Length <= 3 || normalizedTerm.Any(ch => !char.IsLetterOrDigit(ch)))
-        {
-            var pattern = $@"(^|[^a-z0-9]){Regex.Escape(normalizedTerm)}([^a-z0-9]|$)";
-            return Regex.IsMatch(normalizedHaystack, pattern, RegexOptions.IgnoreCase);
-        }
-        return normalizedHaystack.Contains(normalizedTerm);
-    }
-
-    private static string NormalizeKeyword(string value)
-    {
-        var normalized = RemoveDiacritics(value.ToLowerInvariant()).Trim();
-        normalized = Regex.Replace(normalized, @"[^a-z0-9+#.]+", "-").Trim('-');
-        return string.IsNullOrWhiteSpace(normalized) ? "requisito" : normalized;
-    }
-
-    private static string RemoveDiacritics(string value)
-    {
-        var normalized = (value ?? "").Normalize(NormalizationForm.FormD);
-        return new string(normalized.Where(ch => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch) != System.Globalization.UnicodeCategory.NonSpacingMark).ToArray());
-    }
-
-    private sealed record ResolvedJobSource(string Kind, string Text, string Url, string Title, string Company, string Location, Guid? JobLeadId, AiInputAttachment[] Attachments);
 }

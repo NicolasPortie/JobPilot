@@ -1,27 +1,23 @@
-using JobPilot.Api.Data;
 using JobPilot.Api.Domain;
+using JobPilot.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace JobPilot.Api.Services;
 
-public sealed class ApplicationLimitService
+public sealed class ApplicationLimitService(
+    IRepository<AgentPolicy> policies,
+    IRepository<ExecutionEvent> events,
+    IRepository<ApplicationJob> jobs)
 {
-    private readonly JobPilotDbContext _db;
-
-    public ApplicationLimitService(JobPilotDbContext db)
-    {
-        _db = db;
-    }
-
     public async Task<ApplicationLimitSnapshot> GetDailySnapshotAsync(Guid userId, AgentPolicy? policy = null)
     {
-        policy ??= await _db.AgentPolicies.FirstOrDefaultAsync(x => x.UserId == userId);
+        policy ??= await policies.FirstOrDefaultAsync(x => x.UserId == userId);
         var dailyLimit = policy?.MaxApplicationsPerDay ?? 50;
         if (dailyLimit <= 0)
             return new ApplicationLimitSnapshot(dailyLimit, 0, int.MaxValue, false);
 
         var startOfDay = new DateTimeOffset(DateTimeOffset.UtcNow.UtcDateTime.Date, TimeSpan.Zero);
-        var eventAppliedIds = await _db.ExecutionEvents
+        var eventAppliedIds = await events.Query()
             .Where(x =>
                 x.UserId == userId &&
                 x.ApplicationJobId != null &&
@@ -30,7 +26,7 @@ public sealed class ApplicationLimitService
             .Select(x => x.ApplicationJobId!.Value)
             .ToListAsync();
 
-        var taskAppliedIds = await _db.ApplicationJobs
+        var taskAppliedIds = await jobs.Query()
             .Where(x =>
                 x.UserId == userId &&
                 x.State == JobStatuses.Applied &&

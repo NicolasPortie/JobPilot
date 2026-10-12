@@ -1,7 +1,7 @@
+using System.Text.RegularExpressions;
 using JobPilot.Agent.Application;
 using JobPilot.Agent.Domain;
 using Microsoft.Playwright;
-using System.Text.RegularExpressions;
 
 namespace JobPilot.Agent.Platforms.LinkedIn;
 

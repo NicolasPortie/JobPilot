@@ -481,6 +481,12 @@ namespace JobPilot.Api.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("FailedLoginAttempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("LockoutEnd")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("text");
@@ -655,127 +661,6 @@ namespace JobPilot.Api.Data.Migrations
                     b.ToTable("ApplicationRuns");
                 });
 
-            modelBuilder.Entity("JobPilot.Api.Domain.BrowserExtensionCommandJob", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("BrowserExtensionSessionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("ClaimedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset?>("CompletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ElementId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Error")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ReasonCode")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ResultJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BrowserExtensionSessionId", "Status", "CreatedAt");
-
-                    b.ToTable("BrowserExtensionCommandJobs");
-                });
-
-            modelBuilder.Entity("JobPilot.Api.Domain.BrowserExtensionSession", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Browser")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CurrentUrl")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ExtensionVersion")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("InstallationId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<bool>("IsSupportedPage")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("LastError")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset?>("LastHeartbeatAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset?>("LastObservedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("TokenHash")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TokenHash")
-                        .IsUnique();
-
-                    b.HasIndex("UserId", "CreatedAt");
-
-                    b.HasIndex("UserId", "InstallationId");
-
-                    b.ToTable("BrowserExtensionSessions");
-                });
-
             modelBuilder.Entity("JobPilot.Api.Domain.CandidateProfile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -837,6 +722,10 @@ namespace JobPilot.Api.Data.Migrations
                     b.PrimitiveCollection<string[]>("Skills")
                         .IsRequired()
                         .HasColumnType("text[]");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<string>("TargetRole")
                         .IsRequired()
@@ -1336,6 +1225,41 @@ namespace JobPilot.Api.Data.Migrations
                     b.ToTable("QuestionPatterns");
                 });
 
+            modelBuilder.Entity("JobPilot.Api.Domain.RefreshToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("RootCreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.ToTable("RefreshTokens");
+                });
+
             modelBuilder.Entity("JobPilot.Api.Domain.ResumeDocument", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1800,56 +1724,6 @@ namespace JobPilot.Api.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("ReusableAnswers");
-                });
-
-            modelBuilder.Entity("JobPilot.Api.Domain.SavedSearch", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Keywords")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("LimitPerRun")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Location")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Platform")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("PostedWithinDays")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Seniority")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Workplace")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("SavedSearches");
                 });
 
             modelBuilder.Entity("JobPilot.Api.Domain.SiteWorkflowMemory", b =>

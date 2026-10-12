@@ -19,24 +19,24 @@ public class JobFilterServiceTests
     public async Task GetOrCreateAsync_CreatesDefaultFilter_WhenNoneExists()
     {
         var db = CreateDb();
-        var service = new JobFilterService(db);
+        var service = TestServices.JobFilterService(db);
         var userId = Guid.NewGuid();
 
         var filter = await service.GetOrCreateAsync(userId);
 
         Assert.NotNull(filter);
-        Assert.Contains("junior", filter.AllowedSeniorities);
-        Assert.Contains("senior", filter.BlockedSeniorities);
-        Assert.Contains("qa", filter.AllowedRoleKeywords);
-        Assert.Contains("remote", filter.AllowedWorkplaceTypes);
-        Assert.Contains("hybrid", filter.BlockedWorkplaceTypes);
+        Assert.Empty(filter.AllowedSeniorities);
+        Assert.Empty(filter.BlockedSeniorities);
+        Assert.Empty(filter.AllowedRoleKeywords);
+        Assert.Empty(filter.AllowedWorkplaceTypes);
+        Assert.Equal(0, filter.MinScore);
     }
 
     [Fact]
     public void ShouldIgnore_DoesNotBlockAllowedAspNetArchitectRole()
     {
         var db = CreateDb();
-        var service = new JobFilterService(db);
+        var service = TestServices.JobFilterService(db);
         var filter = new JobFilter
         {
             BlockedSeniorities = ["senior", "lead", "manager"],
@@ -66,7 +66,7 @@ public class JobFilterServiceTests
     public void ShouldIgnore_BlocksConfiguredRoleKeyword()
     {
         var db = CreateDb();
-        var service = new JobFilterService(db);
+        var service = TestServices.JobFilterService(db);
         var filter = new JobFilter
         {
             BlockedSeniorities = ["senior"],
@@ -96,7 +96,7 @@ public class JobFilterServiceTests
     public void ShouldIgnore_BlocksSeniorInTitle()
     {
         var db = CreateDb();
-        var service = new JobFilterService(db);
+        var service = TestServices.JobFilterService(db);
         var filter = new JobFilter
         {
             BlockedSeniorities = ["senior", "sr.", "staff"],
@@ -123,7 +123,7 @@ public class JobFilterServiceTests
     public void ShouldIgnore_BlocksHybridInLocation()
     {
         var db = CreateDb();
-        var service = new JobFilterService(db);
+        var service = TestServices.JobFilterService(db);
         var filter = new JobFilter
         {
             BlockedSeniorities = ["senior"],
@@ -150,7 +150,7 @@ public class JobFilterServiceTests
     public void ShouldIgnore_AllowsJuniorRemote()
     {
         var db = CreateDb();
-        var service = new JobFilterService(db);
+        var service = TestServices.JobFilterService(db);
         var filter = new JobFilter
         {
             BlockedSeniorities = ["senior", "sr.", "staff"],
@@ -177,7 +177,7 @@ public class JobFilterServiceTests
     public void ShouldIgnore_TreatsEmptyLocationAsUnknownForRemoteSearch()
     {
         var db = CreateDb();
-        var service = new JobFilterService(db);
+        var service = TestServices.JobFilterService(db);
         var filter = new JobFilter
         {
             BlockedSeniorities = ["senior"],
@@ -206,7 +206,7 @@ public class JobFilterServiceTests
     public void ShouldIgnore_TreatsBrazilLocationAsUnknownForRemoteSearch()
     {
         var db = CreateDb();
-        var service = new JobFilterService(db);
+        var service = TestServices.JobFilterService(db);
         var filter = new JobFilter
         {
             BlockedSeniorities = ["senior"],
@@ -235,7 +235,7 @@ public class JobFilterServiceTests
     public void ShouldIgnore_DoesNotBlockMissingRemoteBadge()
     {
         var db = CreateDb();
-        var service = new JobFilterService(db);
+        var service = TestServices.JobFilterService(db);
         var filter = new JobFilter
         {
             BlockedSeniorities = ["senior"],
@@ -265,7 +265,7 @@ public class JobFilterServiceTests
     public void BuildSearchUrl_KeepsLinkedInDiscoveryBroad()
     {
         var db = CreateDb();
-        var service = new JobFilterService(db);
+        var service = TestServices.JobFilterService(db);
         var filter = new JobFilter
         {
             AllowedSeniorities = ["junior", "entry"],
@@ -283,7 +283,7 @@ public class JobFilterServiceTests
     public void BuildSearchUrl_RemovesEasyApplyFilter_WhenExternalAllowed()
     {
         var db = CreateDb();
-        var service = new JobFilterService(db);
+        var service = TestServices.JobFilterService(db);
         var filter = new JobFilter
         {
             AllowedSeniorities = ["junior"],

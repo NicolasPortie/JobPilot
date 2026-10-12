@@ -1,18 +1,25 @@
 using System.Text.Json;
-using JobPilot.Api.Data;
+using JobPilot.Api.Application;
 using JobPilot.Api.Domain;
+using JobPilot.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace JobPilot.Api.Services;
 
-public sealed class ResumeReviewAnswerService(JobPilotDbContext db, ResumeEvidenceMapService evidenceMapService, ResumeTailoringService tailoringService)
+public sealed class ResumeReviewAnswerService(
+    IRepository<ResumeReviewAnswer> answers,
+    IRepository<ResumeVersion> versions,
+    IRepository<JobTarget> targets,
+    IRepository<ResumeEvidenceMapRun> mapRuns,
+    IUnitOfWork unitOfWork,
+    ResumeEvidenceMapService evidenceMapService,
+    IResumeTailoringService tailoringService)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    public async Task<ResumeReviewAnswer> SaveAsync(Guid userId, SaveReviewAnswerRequest request)
+    public async Task<ResumeReviewAnswerResponse> SaveAsync(Guid userId, SaveReviewAnswerRequest request)
     {
-        var existing = await db.ResumeReviewAnswers
-            .FirstOrDefaultAsync(x => x.UserId == userId && x.JobRequirementId == request.JobRequirementId);
+        var existing = await answers.FirstOrDefaultAsync(x => x.UserId == userId && x.JobRequirementId == request.JobRequirementId);
 
         var now = DateTimeOffset.UtcNow;
         if (existing is not null)
@@ -38,49 +45,50 @@ public sealed class ResumeReviewAnswerService(JobPilotDbContext db, ResumeEviden
                 CreatedAt = now,
                 UpdatedAt = now
             };
-            db.ResumeReviewAnswers.Add(existing);
+            answers.Add(existing);
         }
 
-        await db.SaveChangesAsync();
-        return existing;
+        await unitOfWork.SaveChangesAsync();
+        return ResumeReviewAnswerResponse.From(existing);
     }
 
-    public async Task<ResumeReviewAnswer[]> ListAsync(Guid userId, Guid? evidenceMapRunId = null)
+    public async Task<ResumeReviewAnswerResponse[]> ListAsync(Guid userId, Guid? evidenceMapRunId = null)
     {
-        var query = db.ResumeReviewAnswers.Where(x => x.UserId == userId);
+        var query = answers.Query().Where(x => x.UserId == userId);
         if (evidenceMapRunId is { } id)
             query = query.Where(x => x.ResumeEvidenceMapRunId == id);
-        return await query.OrderByDescending(x => x.UpdatedAt).ToArrayAsync();
+        return (await query.OrderByDescending(x => x.UpdatedAt).ToArrayAsync())
+            .Select(ResumeReviewAnswerResponse.From)
+            .ToArray();
     }
 
     public async Task<RegenerateAfterAnswersResponse> RegenerateAsync(Guid userId, RegenerateAfterAnswersRequest request)
     {
-        var answers = await db.ResumeReviewAnswers
+        var userAnswers = await answers.Query()
             .Where(x => x.UserId == userId && request.AnswerIds.Contains(x.Id))
             .ToListAsync();
 
-        if (answers.Count == 0)
+        if (userAnswers.Count == 0)
             throw new InvalidOperationException("Nenhuma resposta encontrada para regenerar.");
 
         // Build a new evidence map incorporating answers
-        var baseVersion = await db.ResumeVersions
-            .FirstOrDefaultAsync(x => x.Id == request.BaseResumeVersionId && x.UserId == userId)
-            ?? throw new InvalidOperationException("Versao base nao encontrada.");
+        var baseVersion = await versions.FirstOrDefaultAsync(x => x.Id == request.BaseResumeVersionId && x.UserId == userId)
+            ?? throw new InvalidOperationException("Versão base não encontrada.");
 
-        var target = await db.JobTargets
+        var target = await targets.Query()
             .Include(x => x.Requirements)
             .FirstOrDefaultAsync(x => x.Id == request.JobTargetId && x.UserId == userId)
-            ?? throw new InvalidOperationException("Vaga alvo nao encontrada.");
+            ?? throw new InvalidOperationException("Vaga alvo não encontrada.");
 
         // Create new evidence map run with answers applied
         var newMap = await evidenceMapService.BuildAsync(userId, new BuildResumeEvidenceMapRequest(baseVersion.Id, target.Id));
 
         // Apply user answers to the new map items
-        var mapRun = await db.ResumeEvidenceMapRuns
+        var mapRun = await mapRuns.Query()
             .Include(x => x.Items)
             .FirstAsync(x => x.Id == newMap.Id);
 
-        foreach (var answer in answers)
+        foreach (var answer in userAnswers)
         {
             var item = mapRun.Items.FirstOrDefault(x => x.JobRequirementId == answer.JobRequirementId);
             if (item is null) continue;
@@ -104,14 +112,14 @@ public sealed class ResumeReviewAnswerService(JobPilotDbContext db, ResumeEviden
         mapRun.Status = score.Status;
         mapRun.WarningsJson = JsonSerializer.Serialize(score.Warnings, JsonOptions);
 
-        await db.SaveChangesAsync();
+        await unitOfWork.SaveChangesAsync();
 
         // Regenerate tailored resume
         var tailored = await tailoringService.TailorAsync(userId, new TailorResumeRequest(
             baseVersion.Id,
             target.Id,
             mapRun.Id,
-            request.Layout ?? "ats_classic",
+            request.Layout ?? "ats_standard",
             request.UseAi));
 
         return new RegenerateAfterAnswersResponse(
@@ -122,10 +130,11 @@ public sealed class ResumeReviewAnswerService(JobPilotDbContext db, ResumeEviden
             mapRun.Items.Select(x => new ResumeRequirementEvidenceDto(
                 x.Id, x.JobRequirementId, x.RequirementLabel, x.RequirementCategory,
                 x.RequirementImportance, x.MatchStatus, x.EvidenceText, x.EvidenceSource,
-                x.Reason, x.Confidence, x.SortOrder)).ToArray());
+                x.Reason, x.Confidence, x.SortOrder)).ToArray(),
+            tailored);
     }
 }
 
 public record SaveReviewAnswerRequest(Guid? EvidenceMapRunId, Guid JobRequirementId, string RequirementLabel, string QuestionText, string AnswerValue, string AnswerType, string? EvidenceText = null);
-public record RegenerateAfterAnswersRequest(Guid[] AnswerIds, Guid BaseResumeVersionId, Guid JobTargetId, string Layout = "ats_classic", bool UseAi = true);
-public record RegenerateAfterAnswersResponse(Guid NewEvidenceMapRunId, Guid NewTailoredVersionId, string Status, int AtsScore, ResumeRequirementEvidenceDto[] UpdatedEvidences);
+public record RegenerateAfterAnswersRequest(Guid[] AnswerIds, Guid BaseResumeVersionId, Guid JobTargetId, string Layout = "ats_standard", bool UseAi = true);
+public record RegenerateAfterAnswersResponse(Guid NewEvidenceMapRunId, Guid NewTailoredVersionId, string Status, int AtsScore, ResumeRequirementEvidenceDto[] UpdatedEvidences, JobPilot.Api.Application.Contracts.TailoredResumeResponse TailoredResume);

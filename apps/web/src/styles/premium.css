@@ -1,0 +1,481 @@
+/* JobPilot premium surface: warm paper, ink, and one deliberate accent. */
+:root {
+  color-scheme: light;
+  --jp-bg: #f2f1ec;
+  --jp-bg-strong: #e9e8e1;
+  --jp-surface: #fffefa;
+  --jp-surface-subtle: #f8f7f3;
+  --jp-surface-muted: #ebeae4;
+  --jp-surface-raised: #ffffff;
+  --jp-border: #deddd5;
+  --jp-border-strong: #c8c6bc;
+  --jp-ink: #182532;
+  --jp-text-primary: #182532;
+  --jp-text-secondary: #59626a;
+  --jp-text-tertiary: #8e9496;
+  --jp-primary-50: #edf5f3;
+  --jp-primary-100: #d6e8e4;
+  --jp-primary-400: #5fa69d;
+  --jp-primary-500: #367f78;
+  --jp-primary-600: #286b67;
+  --jp-primary-700: #1e514f;
+  --jp-primary-800: #183f40;
+  --jp-accent-50: #fff0eb;
+  --jp-accent-100: #ffd9cf;
+  --jp-accent-400: #ee927b;
+  --jp-accent-500: #e2775d;
+  --jp-accent-600: #c96047;
+  --jp-accent-700: #a74735;
+  --jp-gradient-brand: #e2775d;
+  --jp-gradient-primary: #182532;
+  --jp-gradient-accent: #c96047;
+  --jp-gradient-hero: #203341;
+  --jp-gradient-warm: #d76e51;
+  --jp-shadow-xs: 0 1px 2px rgb(24 37 50 / 0.04);
+  --jp-shadow-sm: 0 10px 26px rgb(24 37 50 / 0.07);
+  --jp-shadow-md: 0 18px 42px rgb(24 37 50 / 0.11);
+  --jp-shadow-primary: 0 8px 22px rgb(24 37 50 / 0.16);
+  --jp-shadow-accent: 0 8px 22px rgb(201 96 71 / 0.22);
+  --jp-ring-primary: 0 0 0 3px rgb(54 127 120 / 0.2);
+  --jp-radius-sm: 6px;
+  --jp-radius-md: 9px;
+  --jp-radius-lg: 12px;
+  --jp-radius-xl: 16px;
+  --jp-transition-fast: 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --jp-transition-base: 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+html {
+  scroll-behavior: auto;
+}
+
+body {
+  background: var(--jp-bg);
+  background-image: none;
+}
+
+.jp-app-shell {
+  background: var(--jp-bg);
+}
+
+.jp-main-content {
+  max-width: 1440px;
+}
+
+.jp-sidebar {
+  background: #ebeae4;
+}
+
+.jp-brand-mark {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: var(--jp-accent-500);
+  color: #fffefa;
+  box-shadow: 0 8px 18px rgb(201 96 71 / 0.2);
+  transition: transform var(--jp-transition-fast), box-shadow var(--jp-transition-fast);
+}
+
+.group:hover .jp-brand-mark {
+  transform: rotate(4deg) translateY(-1px);
+  box-shadow: 0 10px 22px rgb(201 96 71 / 0.28);
+}
+
+.jp-nav-label,
+.jp-eyebrow {
+  color: var(--jp-text-tertiary);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.16em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.jp-nav-item {
+  color: var(--jp-text-secondary);
+}
+
+.jp-nav-item:hover:not(.jp-nav-item--active) {
+  background: rgb(255 254 250 / 0.62);
+  color: var(--jp-text-primary);
+  transform: translateX(2px);
+}
+
+.jp-nav-item--active {
+  background: var(--jp-ink);
+  color: #fffefa;
+  box-shadow: 0 10px 22px rgb(24 37 50 / 0.14);
+}
+
+.jp-nav-item--active::before {
+  position: absolute;
+  left: -1px;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 0 999px 999px 0;
+  background: var(--jp-accent-400);
+  content: '';
+}
+
+.jp-nav-icon {
+  background: rgb(255 254 250 / 0.64);
+  color: var(--jp-primary-700);
+}
+
+.jp-nav-item--active .jp-nav-icon {
+  background: rgb(255 254 250 / 0.12);
+  color: var(--jp-accent-400);
+}
+
+.jp-page-title {
+  max-width: 760px;
+  color: var(--jp-text-primary);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(2rem, 3vw, 3.4rem);
+  font-weight: 600;
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+}
+
+.jp-page-description {
+  max-width: 680px;
+  color: var(--jp-text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.65;
+}
+
+.jp-user-mark {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  border: 1px solid var(--jp-accent-100);
+  border-radius: 999px;
+  background: var(--jp-accent-50);
+  color: var(--jp-accent-700);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+}
+
+.jp-mobile-scrim {
+  background: rgb(24 37 50 / 0.34);
+}
+
+.jp-card {
+  border-color: var(--jp-border);
+  border-radius: var(--jp-radius-xl);
+  background: var(--jp-surface);
+  box-shadow: var(--jp-shadow-xs);
+  transition: border-color var(--jp-transition-base), box-shadow var(--jp-transition-base), transform var(--jp-transition-base);
+}
+
+.jp-card:hover {
+  border-color: var(--jp-border-strong);
+  box-shadow: var(--jp-shadow-sm);
+}
+
+.jp-card--hover:hover {
+  transform: translateY(-2px);
+}
+
+.jp-dashboard-hero {
+  border-top: 3px solid var(--jp-accent-500);
+}
+
+.jp-focus-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.jp-focus-card::after {
+  position: absolute;
+  right: -48px;
+  bottom: -70px;
+  width: 190px;
+  height: 190px;
+  border: 1px solid rgb(255 254 250 / 0.11);
+  border-radius: 999px;
+  content: '';
+  pointer-events: none;
+}
+
+.jp-search-panel {
+  border-left: 3px solid var(--jp-accent-500);
+}
+
+.jp-search-context {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.5rem;
+  border: 1px solid var(--jp-border);
+  border-radius: 999px;
+  background: var(--jp-surface-subtle);
+  color: var(--jp-text-tertiary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding-inline: 0.6rem;
+}
+
+.jp-dashboard-job:hover,
+.jp-dashboard-job--active {
+  background: var(--jp-surface-subtle);
+}
+
+.jp-dashboard-job--active {
+  box-shadow: inset 3px 0 0 var(--jp-accent-500);
+}
+
+.jp-score {
+  display: grid;
+  width: 2.55rem;
+  height: 2.55rem;
+  place-items: center;
+  border: 1px solid var(--jp-border);
+  border-radius: 11px;
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.jp-score--strong {
+  border-color: var(--jp-primary-100);
+  background: var(--jp-primary-50);
+  color: var(--jp-primary-700);
+}
+
+.jp-score--mid {
+  border-color: var(--jp-accent-100);
+  background: var(--jp-accent-50);
+  color: var(--jp-accent-700);
+}
+
+.jp-score--soft {
+  background: var(--jp-surface-muted);
+  color: var(--jp-text-secondary);
+}
+
+.jp-next-action {
+  min-height: 5.65rem;
+}
+
+.jp-next-action__icon {
+  background: var(--jp-surface-muted);
+  color: var(--jp-text-secondary);
+}
+
+.jp-next-action--primary {
+  border-color: var(--jp-primary-100);
+}
+
+.jp-next-action--primary .jp-next-action__icon {
+  background: var(--jp-primary-50);
+  color: var(--jp-primary-700);
+}
+
+.jp-next-action--accent {
+  border-color: var(--jp-accent-100);
+}
+
+.jp-next-action--accent .jp-next-action__icon {
+  background: var(--jp-accent-50);
+  color: var(--jp-accent-700);
+}
+
+.jp-next-action--ink .jp-next-action__icon {
+  background: var(--jp-ink);
+  color: var(--jp-accent-400);
+}
+
+.jp-next-action:hover .jp-next-action__icon {
+  transform: translateY(-1px);
+}
+
+.jp-btn {
+  min-height: 2.75rem;
+  border-radius: 9px;
+  font-weight: 800;
+  transition: transform var(--jp-transition-fast), box-shadow var(--jp-transition-fast), border-color var(--jp-transition-fast), background-color var(--jp-transition-fast), color var(--jp-transition-fast);
+}
+
+.jp-btn--compact {
+  min-height: 2.4rem;
+  padding-inline: 0.75rem;
+  font-size: 0.75rem;
+}
+
+.jp-btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.97);
+}
+
+.jp-btn--primary,
+.bg-blue-600 {
+  border-color: var(--jp-ink) !important;
+  background: var(--jp-ink) !important;
+  color: #fffefa !important;
+  box-shadow: var(--jp-shadow-primary) !important;
+}
+
+.jp-btn--primary:hover:not(:disabled),
+.hover\:bg-blue-700:hover,
+button.bg-blue-600:hover:not(:disabled),
+button.bg-teal-700:hover:not(:disabled) {
+  border-color: #273b4a !important;
+  background: #273b4a !important;
+  box-shadow: 0 12px 26px rgb(24 37 50 / 0.2) !important;
+  transform: translateY(-1px);
+}
+
+/* The login action is a quiet invitation into the workspace, not a warning-colored alert. */
+.jp-login-submit {
+  border-color: var(--jp-ink) !important;
+  background: var(--jp-surface-raised) !important;
+  color: var(--jp-ink) !important;
+  box-shadow: 0 1px 0 rgb(24 37 50 / 0.12), 0 8px 18px rgb(24 37 50 / 0.08) !important;
+}
+
+.jp-login-submit:hover:not(:disabled) {
+  border-color: var(--jp-ink) !important;
+  background: var(--jp-bg) !important;
+  color: var(--jp-ink) !important;
+  box-shadow: 0 10px 22px rgb(24 37 50 / 0.14) !important;
+}
+
+.jp-btn--accent {
+  border-color: var(--jp-accent-600) !important;
+  background: var(--jp-accent-600) !important;
+  color: #fffefa !important;
+  box-shadow: var(--jp-shadow-accent) !important;
+}
+
+.jp-btn--accent:hover:not(:disabled) {
+  border-color: var(--jp-accent-700) !important;
+  background: var(--jp-accent-700) !important;
+  box-shadow: 0 12px 26px rgb(201 96 71 / 0.27) !important;
+  transform: translateY(-1px);
+}
+
+.jp-btn--secondary {
+  border-color: var(--jp-border) !important;
+  background: var(--jp-surface) !important;
+  color: var(--jp-text-primary) !important;
+  box-shadow: var(--jp-shadow-xs) !important;
+}
+
+.jp-btn--secondary:hover:not(:disabled) {
+  border-color: var(--jp-border-strong) !important;
+  background: var(--jp-surface-subtle) !important;
+  box-shadow: var(--jp-shadow-sm) !important;
+  transform: translateY(-1px);
+}
+
+.jp-btn--ghost:hover:not(:disabled) {
+  background: var(--jp-surface-muted);
+  color: var(--jp-text-primary);
+}
+
+.jp-input {
+  min-height: 2.75rem;
+  border-color: var(--jp-border);
+  border-radius: 9px;
+  background: var(--jp-surface);
+  color: var(--jp-text-primary);
+  transition: border-color var(--jp-transition-fast), box-shadow var(--jp-transition-fast), background-color var(--jp-transition-fast);
+}
+
+.jp-input:hover {
+  border-color: var(--jp-border-strong);
+}
+
+.jp-input:focus {
+  border-color: var(--jp-primary-600);
+  box-shadow: var(--jp-ring-primary);
+}
+
+/* The legacy input base sets horizontal padding. Restore the deliberate icon
+   offsets used by newer field compositions. */
+.jp-input.pl-9 { padding-left: 2.25rem; }
+.jp-input.pl-12 { padding-left: 3rem; }
+.jp-input.pr-8 { padding-right: 2rem; }
+.jp-input.pr-12 { padding-right: 3rem; }
+
+.jp-section,
+.jp-section-header {
+  border-color: var(--jp-border);
+  background: var(--jp-surface);
+}
+
+.jp-section-header {
+  background: var(--jp-surface-subtle);
+}
+
+.jp-alert {
+  border-radius: var(--jp-radius-md);
+}
+
+.jp-badge {
+  font-size: 0.68rem;
+  letter-spacing: 0.01em;
+}
+
+.jp-badge--violet,
+.jp-badge--sky {
+  border-color: var(--jp-primary-100);
+  background: var(--jp-primary-50);
+  color: var(--jp-primary-700);
+}
+
+.jp-badge--teal {
+  border-color: var(--jp-primary-100);
+  background: var(--jp-primary-50);
+  color: var(--jp-primary-700);
+}
+
+.jp-badge--amber {
+  border-color: var(--jp-accent-100);
+  background: var(--jp-accent-50);
+  color: var(--jp-accent-700);
+}
+
+.jp-empty-state__icon {
+  border: 1px solid var(--jp-primary-100);
+  background: var(--jp-primary-50);
+  color: var(--jp-primary-700);
+  box-shadow: none;
+}
+
+.jp-mobile-menu {
+  transition: transform var(--jp-transition-fast), border-color var(--jp-transition-fast), color var(--jp-transition-fast);
+}
+
+.jp-mobile-menu:active {
+  transform: scale(0.96);
+}
+
+button:focus-visible,
+.jp-btn:focus-visible,
+.jp-input:focus-visible {
+  outline: 2px solid var(--jp-primary-500);
+  outline-offset: 3px;
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

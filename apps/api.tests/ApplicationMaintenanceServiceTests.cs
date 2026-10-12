@@ -25,7 +25,7 @@ public class ApplicationMaintenanceServiceTests
         });
         await db.SaveChangesAsync();
 
-        var result = await new ApplicationMaintenanceService(db).RecoverStaleWorkAsync(now);
+        var result = await TestServices.ApplicationMaintenanceService(db).RecoverStaleWorkAsync(now);
 
         var run = await db.AgentRuns.SingleAsync(x => x.Id == runId);
         Assert.Equal(1, result.StaleAgentRuns);
@@ -52,7 +52,7 @@ public class ApplicationMaintenanceServiceTests
         });
         await db.SaveChangesAsync();
 
-        var result = await new ApplicationMaintenanceService(db).RecoverStaleWorkAsync(now);
+        var result = await TestServices.ApplicationMaintenanceService(db).RecoverStaleWorkAsync(now);
 
         var run = await db.AgentRuns.SingleAsync(x => x.Id == runId);
         Assert.Equal(0, result.StaleAgentRuns);
@@ -90,7 +90,7 @@ public class ApplicationMaintenanceServiceTests
             });
         await db.SaveChangesAsync();
 
-        var result = await new ApplicationMaintenanceService(db).RecoverStaleWorkAsync(now, userId);
+        var result = await TestServices.ApplicationMaintenanceService(db).RecoverStaleWorkAsync(now, userId);
 
         Assert.Equal(1, result.StaleAgentRuns);
         Assert.Equal("failed", (await db.AgentRuns.SingleAsync(x => x.Id == ownRunId)).State);
@@ -133,7 +133,7 @@ public class ApplicationMaintenanceServiceTests
         });
         await db.SaveChangesAsync();
 
-        var result = await new ApplicationMaintenanceService(db).RecoverStaleWorkAsync(now);
+        var result = await TestServices.ApplicationMaintenanceService(db).RecoverStaleWorkAsync(now);
 
         var job = await db.ApplicationJobs.Include(x => x.JobLead).SingleAsync(x => x.Id == jobId);
         Assert.Equal(1, result.StaleApplicationJobs);
@@ -180,7 +180,7 @@ public class ApplicationMaintenanceServiceTests
         });
         await db.SaveChangesAsync();
 
-        var result = await new ApplicationMaintenanceService(db).RecoverStaleWorkAsync(now);
+        var result = await TestServices.ApplicationMaintenanceService(db).RecoverStaleWorkAsync(now);
 
         var job = await db.ApplicationJobs.SingleAsync(x => x.Id == jobId);
         Assert.Equal(0, result.StaleApplicationJobs);

@@ -1,0 +1,131 @@
+name: Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet restore JobPilot.slnx
+      - name: Format check
+        run: dotnet format JobPilot.slnx --verify-no-changes --no-restore
+      - name: Architecture checks
+        shell: pwsh
+        run: ./scripts/architecture-check.ps1
+      - name: Quality script regression checks
+        shell: pwsh
+        run: ./scripts/tests/quality.Tests.ps1
+      - run: dotnet test JobPilot.slnx --no-restore --configuration Release --collect:"XPlat Code Coverage"
+      - name: Validate idempotent migrations script
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+          Auth__JwtKey: ci-jwt-key-with-more-than-thirty-two-characters
+          Security__SecretKey: ci-data-key-with-more-than-thirty-two-characters
+          ConnectionStrings__DefaultConnection: Host=localhost;Database=qualitycheck
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.0.12
+          dotnet ef migrations has-pending-model-changes --project apps/api --startup-project apps/api --configuration Release --no-build
+          dotnet ef migrations script --idempotent --project apps/api --startup-project apps/api --configuration Release --no-build --output migrations.sql
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-test-results
+          path: |
+            **/TestResults/**
+            **/coverage.*
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-build
+          path: apps/web/dist
+
+  postgres-smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: jobpilot
+          POSTGRES_PASSWORD: ci-only-${{ github.run_id }}-${{ github.run_attempt }}
+          POSTGRES_DB: jobpilot
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U jobpilot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: PostgreSQL migration integration tests
+        env:
+          JOBPILOT_TEST_POSTGRES: Host=localhost;Port=5434;Database=jobpilot;Username=jobpilot;Password=ci-only-${{ github.run_id }}-${{ github.run_attempt }}
+        run: dotnet test apps/api.tests --configuration Release --filter Category=PostgreSQL --logger "trx;LogFileName=postgres-migrations.trx"
+      - name: Start API against PostgreSQL
+        env:
+          ASPNETCORE_ENVIRONMENT: Production
+          ConnectionStrings__DefaultConnection: Host=localhost;Port=5434;Database=jobpilot;Username=jobpilot;Password=ci-only-${{ github.run_id }}-${{ github.run_attempt }}
+          Auth__JwtKey: ci-jwt-key-with-more-than-thirty-two-characters
+          Auth__SeedEmail: ci@jobpilot.local
+          Auth__SeedPassword: ci-bootstrap-password
+          Security__SecretKey: ci-data-key-with-more-than-thirty-two-characters
+          Database__ApplyMigrationsOnStartup: "true"
+          Database__SeedOnStartup: "true"
+          ASPNETCORE_URLS: http://127.0.0.1:5000
+        run: |
+          dotnet run --project apps/api --configuration Release --no-build --no-launch-profile > api-ci.log 2>&1 &
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:5000/health/ready && exit 0
+            sleep 2
+          done
+          cat api-ci.log
+          exit 1
+      - name: Upload PostgreSQL test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: postgres-migration-test-results
+          path: apps/api.tests/TestResults/**
+      - name: Upload API logs
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: postgres-smoke-logs
+          path: api-ci.log
+
+  deployment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate production Compose
+        run: docker compose --env-file infra/.env.production.example -f infra/docker-compose.production.yml config --quiet
+      - name: Build production images
+        run: docker compose --env-file infra/.env.production.example -f infra/docker-compose.production.yml build api web

@@ -1,5 +1,7 @@
 # JobPilot Curriculo ATS com IA - Pesquisa, modelagem e plano
 
+> Status: parcialmente aproveitado. As partes de importacao, evidencia, analise de aderencia, tailoring e exportacao continuam validas; qualquer trecho sobre automacao de candidatura, agente ou extensao esta superseded pela arquitetura manual definida em [`REESTRUTURACAO_PRODUTO.md`](REESTRUTURACAO_PRODUTO.md).
+
 Data: 2026-06-02
 
 ## 1. Tese do produto

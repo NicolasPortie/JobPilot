@@ -1,10 +1,10 @@
-using JobPilot.Api.Data;
 using JobPilot.Api.Domain;
+using JobPilot.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace JobPilot.Api.Services;
 
-public sealed class AutoApplyPolicyService(JobPilotDbContext db)
+public sealed class AutoApplyPolicyService(IRepository<JobTarget> targets)
 {
     public async Task<AutoApplyPolicyResult> EvaluateAsync(Guid userId, JobLead lead, CandidateProfile? profile, JobFilter filter)
     {
@@ -25,7 +25,7 @@ public sealed class AutoApplyPolicyService(JobPilotDbContext db)
         }
 
         // 4. Check for unknown must-have requirements if job was organized
-        var jobTarget = await db.JobTargets
+        var jobTarget = await targets.Query()
             .Include(x => x.Requirements)
             .Where(x => x.UserId == userId && x.JobLeadId == lead.Id)
             .OrderByDescending(x => x.UpdatedAt)

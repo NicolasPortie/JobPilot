@@ -12,7 +12,7 @@ public class ResumeReviewAnswerServiceTests
     {
         await using var db = CreateDb();
         var userId = Guid.NewGuid();
-        var service = new ResumeReviewAnswerService(db, new ResumeEvidenceMapService(db), new ResumeTailoringService(db, new ResumeEvidenceMapService(db), new FakeAiChatService()));
+        var service = TestServices.ResumeReviewAnswerService(db, new FakeAiChatService());
 
         var answer = await service.SaveAsync(userId, new SaveReviewAnswerRequest(
             Guid.NewGuid(), Guid.NewGuid(), "Ingles avancado", "Tem ingles?", "Tenho ingles tecnico", "proven", "Curso de ingles"));
@@ -27,7 +27,7 @@ public class ResumeReviewAnswerServiceTests
         await using var db = CreateDb();
         var userId = Guid.NewGuid();
         var reqId = Guid.NewGuid();
-        var service = new ResumeReviewAnswerService(db, new ResumeEvidenceMapService(db), new ResumeTailoringService(db, new ResumeEvidenceMapService(db), new FakeAiChatService()));
+        var service = TestServices.ResumeReviewAnswerService(db, new FakeAiChatService());
 
         await service.SaveAsync(userId, new SaveReviewAnswerRequest(null, reqId, "Ingles", "Tem?", "Sim", "proven"));
         var updated = await service.SaveAsync(userId, new SaveReviewAnswerRequest(null, reqId, "Ingles", "Tem?", "Nao", "missing"));
@@ -41,7 +41,7 @@ public class ResumeReviewAnswerServiceTests
     {
         await using var db = CreateDb();
         var userId = Guid.NewGuid();
-        var service = new ResumeReviewAnswerService(db, new ResumeEvidenceMapService(db), new ResumeTailoringService(db, new ResumeEvidenceMapService(db), new FakeAiChatService()));
+        var service = TestServices.ResumeReviewAnswerService(db, new FakeAiChatService());
 
         await service.SaveAsync(userId, new SaveReviewAnswerRequest(null, Guid.NewGuid(), "A", "Q1", "S1", "proven"));
         await service.SaveAsync(userId, new SaveReviewAnswerRequest(null, Guid.NewGuid(), "B", "Q2", "S2", "missing"));
@@ -94,8 +94,8 @@ public class ResumeReviewAnswerServiceTests
         });
         await db.SaveChangesAsync();
 
-        var evidenceService = new ResumeEvidenceMapService(db);
-        var service = new ResumeReviewAnswerService(db, evidenceService, new ResumeTailoringService(db, evidenceService, new FakeAiChatService()));
+        var evidenceService = TestServices.ResumeEvidenceMapService(db);
+        var service = TestServices.ResumeReviewAnswerService(db, new FakeAiChatService());
         var answer = await service.SaveAsync(userId, new SaveReviewAnswerRequest(null, kubeReqId, "Kubernetes", "Tem Kubernetes?", "Atuei com Docker e deploys em ambientes conteinerizados.", "adjacent", "Deploys com Docker"));
 
         var result = await service.RegenerateAsync(userId, new RegenerateAfterAnswersRequest([answer.Id], versionId, targetId, "ats_classic", false));
@@ -109,6 +109,9 @@ public class ResumeReviewAnswerServiceTests
         Assert.Equal(expected.Confidence, map.Confidence);
         Assert.Equal(expected.Status, map.Status);
         Assert.NotEqual(33, map.EvidenceScore);
+        Assert.Equal(result.NewTailoredVersionId, result.TailoredResume.TailoredVersionId);
+        Assert.Equal(result.AtsScore, result.TailoredResume.AtsScore);
+        Assert.Equal(result.AtsScore, result.TailoredResume.ScoreComponents.Sum(x => x.Score));
     }
 
     private static JobRequirement Req(Guid userId, Guid targetId, Guid id, string category, string label, string importance, string keyword, int order) =>

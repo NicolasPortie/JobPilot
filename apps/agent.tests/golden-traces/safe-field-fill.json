@@ -1,0 +1,69 @@
+{
+  "objectiveKind": "apply",
+  "platform": "Generic",
+  "module": "GenericPlatformModule",
+  "phase": "Form",
+  "planner": "local",
+  "proposal": {
+    "type": "fill",
+    "elementId": "email",
+    "value": "nicolas@example.com",
+    "label": "E-mail",
+    "reason": "Profile field mapped from candidate data.",
+    "confidence": 0.95,
+    "planner": "local",
+    "expectedEffect": "field_value_changes",
+    "requiresCheckpoint": false
+  },
+  "risk": {
+    "level": "Low",
+    "reasons": [
+      "known_profile_field",
+      "target_observed"
+    ],
+    "isSubmitBoundary": false,
+    "requiresCheckpoint": false,
+    "budget": {
+      "maxAutoRisk": "Medium",
+      "allowSubmit": false,
+      "allowSensitiveWithoutSource": false,
+      "allowGenericSubmit": false
+    }
+  },
+  "verdict": {
+    "allowed": true,
+    "verdict": "approved",
+    "reason": "known_profile_field; target_observed",
+    "guardrails": [
+      "target_observed_or_not_required",
+      "action_type_matches_target",
+      "navigation_required_fields_clear"
+    ],
+    "requiresCheckpoint": false
+  },
+  "outcome": {
+    "success": true,
+    "status": "validated_changed",
+    "message": "Field filled and page fingerprint changed.",
+    "beforeFingerprint": "before-email",
+    "afterFingerprint": "after-email",
+    "stateChanged": true,
+    "failureCode": null,
+    "failure": null,
+    "requiresCheckpoint": false
+  },
+  "recovery": {
+    "mode": "None",
+    "reason": "Action succeeded.",
+    "continueLoop": true,
+    "suggestedUserAction": "",
+    "resumeMode": "reobserve"
+  },
+  "contentSafety": {
+    "hasSignals": false,
+    "hasPromptInjectionSignals": false,
+    "riskLevel": "None",
+    "summary": "No suspicious observed content signals.",
+    "signals": []
+  }
+}

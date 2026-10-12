@@ -1,0 +1,66 @@
+/* ==========================================================================
+   JobPilot — Currículo / Adaptação por vaga (fundo — Etapa 2 img-to-html)
+   Tema warm cream/peach/terracota amostrado da referência.
+   Escopo desta etapa: TOKENS + FUNDO da página. Sem navbar, cards ou conteúdo.
+   As ondas da sidebar e a foto do banner entram com o chrome (Etapa 3).
+   ========================================================================== */
+
+:root {
+  /* Superfícies */
+  --cv-bg: #faf6ed;
+  --cv-bg-deep: #f4ecdd;
+  --cv-sidebar: #f8f1e4;
+  --cv-card: #ffffff;
+  --cv-border: #f0e3cf;
+  --cv-border-strong: #e3d0b4;
+
+  /* Marca terracota */
+  --cv-edge: #b8471f;
+  --cv-brand: #bd4a22;
+  --cv-brand-strong: #a53c17;
+  --cv-brand-ink: #8c3413;
+
+  /* Peach (pills, chips, abas ativas) */
+  --cv-peach: #fbe9d7;
+  --cv-peach-strong: #f5d3b4;
+  --cv-chip: #f8e6d0;
+  --cv-chip-ink: #8a4b2a;
+
+  /* Texto */
+  --cv-ink: #221a14;
+  --cv-muted: #7c6f60;
+  --cv-faint: #a89a86;
+
+  /* Verde (aderência) */
+  --cv-green: #2f9e5f;
+  --cv-green-ink: #1f7a44;
+  --cv-green-bg: #e9f6ee;
+
+  /* Tipografia (famílias definidas na Etapa 3, antes do ajuste fino) */
+  --cv-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --cv-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --cv-radius: 16px;
+  --cv-shadow: 0 10px 30px rgb(140 52 19 / 0.08);
+}
+
+/* Fundo completo da página — aplicado via <body class="cv-fundo"> na aba Currículo */
+body.cv-fundo {
+  background-color: var(--cv-bg);
+  background-image:
+    radial-gradient(900px 480px at 88% -6%, rgb(245 211 180 / 0.55), transparent 60%),
+    radial-gradient(760px 520px at -8% 108%, rgb(232 168 124 / 0.35), transparent 58%),
+    radial-gradient(620px 380px at 42% 42%, rgb(255 255 255 / 0.7), transparent 65%);
+  background-attachment: fixed;
+}
+
+/* Faixa terracota na borda esquerda (viewport) */
+body.cv-fundo::before {
+  content: "";
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 10px;
+  background: linear-gradient(180deg, var(--cv-edge) 0%, #a53c17 55%, #93350f 100%);
+  z-index: 60;
+  pointer-events: none;
+}

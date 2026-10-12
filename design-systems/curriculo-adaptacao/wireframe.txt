@@ -1,0 +1,69 @@
++----------------------------------------------------------------------------------+
+| nav (FIXA: position fixed, h-100dvh, scroll interno; fundo cream/peach, borda esquerda terracota)               |
+| [t1: JobPilot] [t3: Sua carreira com mais direcao]                             |
+| [btn: [ico:home] Inicio]  <- ativo, fundo peach                                |
+| [lnk: [ico:doc] Curriculo / Adaptar e exportar]                                |
+| [lnk: [ico:user] Perfil / Base profissional]                                   |
+| +----------------------------------------------------------------------------+ |
+| | card8 (perfil 82% completo)                                                | |
+| | [h3: Perfil 82% completo] [chart: barra 82%]                               | |
+| | [t3: Complete seu perfil para receber recomendacoes...]                    | |
+| | [lnk: Completar perfil ->]                                                 | |
+| +----------------------------------------------------------------------------+ |
+| [lnk: [ico:gear] Configuracoes] [lnk: [ico:help] Ajuda]                        |
+| [lnk: [ico:exit] Sair da conta]                                                |
+| [img: ondas terracota decorativas]                                             |
+| [t2: Grandes carreiras comecam com boas decisoes.]                             |
++----------------------------------------------------------------------------------+
++--------------------------------------------------------------------------------------------------------------------+
+| topbar (faixa sobre a coluna central + rail)                                                                       |
+| [img: banner foto desk/planta] [t2: Trabalho tambem e futuro.]   [av:NP] [t1: Nicolas Portie] [t3: Desenvolvedor]   |
++--------------------------------------------------------------------------------------------------------------------+
++------------------------------------------------+  +--------------------------------------------------------------+
+| hero                                           |  | rail (SUB-GRID: previa alta + pilha, mesma linha da center)  |
+| [t3: CURRICULO QUE TE APROXIMA]                |  | [h2: Previa do curriculo adaptado]  [btn2: [ico:doc] Ver ...] |
+| [h1: Adapte seu curriculo para esta vaga]      |  | [t2: Veja como seu curriculo ficara e confira a analise...]  |
+| [t2: O JobPilot compara os requisitos da vaga  |  | +---------------------------+  +---------------------------+ |
+|  com o seu perfil e gera uma versao ...]       |  | | card7 (previa, ALTA,   |  | stack (pilha direita):    | |
++------------------------------------------------+  | | ocupa altura da pilha) |  | | card3 (aderencia)       | |
+| card (passo 1) + conectivo pontilhado          |  | | [av:NP] [t1: Nicolas ...]|  | | [ico:gauge] [h3: Ader..]| |
+| [ico:num 1] [h2: Curriculo base]               |  | | [badge: Alta aderencia]   |  | | [t1: Otima aderencia!]   | |
+| [t2: Selecione o curriculo que sera adaptado]  |  | | [h3: Resumo profissional] |  | | [t3: Seu perfil atende..]| |
+| +--------------------------------------------+ |  | | [t3: ... barras ...]      |  | | [lnk: chevron >]         | |
+| | card2 (base row): [ico:doc]                | |  | | [h3: Experiencia ...]     |  | +---------------------------+ |
+| | [t1: Curriculo base - ASP.NET Developer]   | |  | | [t2: timeline Full Stack ]|  | | card4 (pontos)            | |
+| | [t3: Atualizado em 12 de mar. de 2024]     | |  | | [t2: timeline .NET ...]   |  | | [ico:check] [h3: Pontos..]| |
+| | [badge: [ico:check] Base pronta]            | |  | | [h3: Habilidades] chips:  |  | | [t3: Experiencias e hab...]| |
+| | [btn2: Trocar [ico:swap]]                  | |  | | ASP.NET C# SQL APIs ...   |  | | chips: ASP.NET SQL ...    | |
+| +--------------------------------------------+ |  | | Azure JavaScript HTML CSS |  | | [lnk: chevron >]         | |
++------------------------------------------------+  | | [h3: Formacao] [t2: Bach.]|  +---------------------------+ |
+| form (passo 2) + conectivo pontilhado          |  | | [t2: Universidade ...]    |  | | card5 (sugestoes)         | |
+| [ico:num 2] [h2: Dados da vaga]  [lnk: [ico:he|  | +---------------------------+  | | [ico:doc] [h3: Sugest..]  | |
+| lp] Precisa de ajuda?]                         |  |                              | | [t3: Inclua estes pontos..]| |
+| [t2: Informe os dados da vaga ...]             |  |                              | | chips: Azure Testes ...   | |
+| [btn: [ico:doc] Colar descricao da vaga]       |  |                              | | chips: Mensurar AWS ...   | |
+| [btn2: [ico:link] Link da vaga]                |  |                              | +---------------------------+ |
+| [btn2: [ico:clip] Anexar PDF ou imagem]        |  |                                                              |
+| [t1: Descricao da vaga *]                      |  |                                                              |
+| [in: Cole aqui a descricao completa da vaga..] |  |                                                              |
+| [t3: 0/2000]                                   |  |                                                              |
++------------------------------------------------+  |                                                              |
+| card (passo 3 + conectivo, fecha a linha)      |  |  (rail termina aqui, alinhado a base do passo 3)             |
+| [ico:num 3] [h2: Formato de saida]             |  |                                                              |
+| [t2: Escolha o formato ideal ...]              |  +--------------------------------------------------------------+
+| [in: ATS padrao [ico:chevron]] (select)        |
+| [t3: Formato otimizado para sistemas ...]      |
++------------------------------------------------+
++--------------------------------------------------------------------------------------------------------------------+
+| section (insights full-width, abaixo das duas colunas)                                                             |
+| [h2: Insights da vaga para voce] [t3: Com base na descricao...]          [lnk: Ver analise completa ->]            |
+| +-------------------------------+  +-------------------------------+  +-------------------------------+          |
+| | card6: [ico:bars] [lnk: >]   |  | card6: [ico:search] [lnk: >]  |  | card6: [ico:lamp] [lnk: >]    |          |
+| | [t1: Resultados concretos]    |  | [t1: Palavras-chave ...]      |  | [t1: Projetos relevantes]     |          |
+| | [t3: Vagas nesta area ...]    |  | [t3: Use os termos mais ...]  |  | [t3: Destaque projetos ...]   |          |
+| +-------------------------------+  +-------------------------------+  +-------------------------------+          |
++--------------------------------------------------------------------------------------------------------------------+
++--------------------------------------------------------------------------------------------------------------------+
+| footer (barra fixa)                                                                                                |
+| [ico:clock] [t3: Ultima alteracao ha alguns segundos]   [btn2: [ico:save] Salvar rascunho]  [btn: Adaptar ... ->]  |
++--------------------------------------------------------------------------------------------------------------------+

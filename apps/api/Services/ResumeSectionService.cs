@@ -1,36 +1,36 @@
 using System.Text.Json;
-using JobPilot.Api.Data;
 using JobPilot.Api.Domain;
+using JobPilot.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace JobPilot.Api.Services;
 
-public sealed class ResumeSectionService(JobPilotDbContext db)
+public sealed class ResumeSectionService(
+    IRepository<ResumeSection> sections,
+    IRepository<ResumeVersion> versions,
+    IUnitOfWork unitOfWork)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public async Task<ResumeSectionDto[]> ListAsync(Guid userId, Guid versionId)
     {
-        if (!await db.ResumeVersions.AnyAsync(x => x.Id == versionId && x.UserId == userId))
-            throw new InvalidOperationException("Versao de curriculo nao encontrada.");
+        if (!await versions.Query().AnyAsync(x => x.Id == versionId && x.UserId == userId))
+            throw new KeyNotFoundException("Versao de curriculo nao encontrada.");
 
-        var sections = await db.ResumeSections
+        return await sections.Query()
             .Where(x => x.UserId == userId && x.ResumeVersionId == versionId)
             .OrderBy(x => x.SortOrder)
             .Select(x => new ResumeSectionDto(x.Id, x.SectionType, x.Title, x.SortOrder, x.ContentJson))
             .ToArrayAsync();
-        return sections;
     }
 
     public async Task<ResumeSectionDto> AddAsync(Guid userId, Guid versionId, CreateResumeSectionRequest request)
     {
-        var version = await db.ResumeVersions.FirstOrDefaultAsync(x => x.Id == versionId && x.UserId == userId)
-            ?? throw new InvalidOperationException("Versao de curriculo nao encontrada.");
+        var version = await versions.FirstOrDefaultAsync(x => x.Id == versionId && x.UserId == userId)
+            ?? throw new InvalidOperationException("Versão de currículo não encontrada.");
 
-        var maxOrder = await db.ResumeSections
-            .Where(x => x.ResumeVersionId == versionId)
-            .Select(x => (int?)x.SortOrder)
-            .MaxAsync() ?? 0;
+        var currentSections = await LoadSectionsAsync(version);
+        var maxOrder = currentSections.Select(x => (int?)x.SortOrder).Max() ?? 0;
 
         var section = new ResumeSection
         {
@@ -43,20 +43,20 @@ public sealed class ResumeSectionService(JobPilotDbContext db)
             ContentJson = request.ContentJson
         };
 
-        db.ResumeSections.Add(section);
-        await db.SaveChangesAsync();
-        await RebuildPlainTextAsync(version);
-        await db.SaveChangesAsync();
+        sections.Add(section);
+        currentSections.Add(section);
+        RebuildPlainText(version, currentSections);
+        await unitOfWork.SaveChangesAsync();
 
         return new ResumeSectionDto(section.Id, section.SectionType, section.Title, section.SortOrder, section.ContentJson);
     }
 
     public async Task<ResumeSectionDto> UpdateAsync(Guid userId, Guid sectionId, UpdateResumeSectionRequest request)
     {
-        var section = await db.ResumeSections
+        var section = await sections.Query()
             .Include(x => x.Version)
             .FirstOrDefaultAsync(x => x.Id == sectionId && x.UserId == userId)
-            ?? throw new InvalidOperationException("Secao nao encontrada.");
+            ?? throw new InvalidOperationException("Seção não encontrada.");
 
         if (!string.IsNullOrWhiteSpace(request.Title))
             section.Title = request.Title;
@@ -66,42 +66,41 @@ public sealed class ResumeSectionService(JobPilotDbContext db)
             section.SortOrder = order;
 
         if (section.Version is not null)
-            await RebuildPlainTextAsync(section.Version);
+            RebuildPlainText(section.Version, await LoadSectionsAsync(section.Version));
 
-        await db.SaveChangesAsync();
+        await unitOfWork.SaveChangesAsync();
 
         return new ResumeSectionDto(section.Id, section.SectionType, section.Title, section.SortOrder, section.ContentJson);
     }
 
     public async Task<ResumeSectionDto[]> ReorderAsync(Guid userId, Guid versionId, ReorderResumeSectionsRequest request)
     {
-        var version = await db.ResumeVersions
-            .FirstOrDefaultAsync(x => x.Id == versionId && x.UserId == userId)
-            ?? throw new InvalidOperationException("Versao de curriculo nao encontrada.");
+        var version = await versions.FirstOrDefaultAsync(x => x.Id == versionId && x.UserId == userId)
+            ?? throw new InvalidOperationException("Versão de currículo não encontrada.");
 
         var sectionIds = request.SectionIds
             .Where(id => id != Guid.Empty)
             .ToArray();
         if (sectionIds.Length == 0)
-            throw new InvalidOperationException("Informe a ordem das secoes.");
+            throw new InvalidOperationException("Informe a ordem das seções.");
         if (sectionIds.Distinct().Count() != sectionIds.Length)
-            throw new InvalidOperationException("A lista de secoes contem itens duplicados.");
+            throw new InvalidOperationException("A lista de seções contém itens duplicados.");
 
-        var sections = await db.ResumeSections
+        var existingSections = await sections.Query()
             .Where(x => x.UserId == userId && x.ResumeVersionId == versionId)
             .OrderBy(x => x.SortOrder)
             .ToListAsync();
 
-        if (sections.Count == 0)
-            throw new InvalidOperationException("Nao ha secoes para reordenar.");
-        if (sections.Count != sectionIds.Length)
-            throw new InvalidOperationException("A nova ordem deve conter todas as secoes da versao.");
+        if (existingSections.Count == 0)
+            throw new InvalidOperationException("Não há seções para reordenar.");
+        if (existingSections.Count != sectionIds.Length)
+            throw new InvalidOperationException("A nova ordem deve conter todas as seções da versão.");
 
-        var sectionMap = sections.ToDictionary(x => x.Id);
-        foreach (var sectionId in sectionIds)
+        var sectionMap = existingSections.ToDictionary(x => x.Id);
+        foreach (var id in sectionIds)
         {
-            if (!sectionMap.ContainsKey(sectionId))
-                throw new InvalidOperationException("A nova ordem contem secao invalida para esta versao.");
+            if (!sectionMap.ContainsKey(id))
+                throw new InvalidOperationException("A nova ordem contém seção inválida para esta versão.");
         }
 
         for (var index = 0; index < sectionIds.Length; index++)
@@ -109,11 +108,10 @@ public sealed class ResumeSectionService(JobPilotDbContext db)
             sectionMap[sectionIds[index]].SortOrder = (index + 1) * 10;
         }
 
-        await db.SaveChangesAsync();
-        await RebuildPlainTextAsync(version);
-        await db.SaveChangesAsync();
+        RebuildPlainText(version, existingSections);
+        await unitOfWork.SaveChangesAsync();
 
-        return sections
+        return existingSections
             .OrderBy(x => x.SortOrder)
             .Select(x => new ResumeSectionDto(x.Id, x.SectionType, x.Title, x.SortOrder, x.ContentJson))
             .ToArray();
@@ -121,30 +119,34 @@ public sealed class ResumeSectionService(JobPilotDbContext db)
 
     public async Task DeleteAsync(Guid userId, Guid sectionId)
     {
-        var section = await db.ResumeSections
+        var section = await sections.Query()
             .Include(x => x.Version)
             .FirstOrDefaultAsync(x => x.Id == sectionId && x.UserId == userId)
-            ?? throw new InvalidOperationException("Secao nao encontrada.");
+            ?? throw new InvalidOperationException("Seção não encontrada.");
 
         var version = section.Version;
-        db.ResumeSections.Remove(section);
-        await db.SaveChangesAsync();
+        sections.Remove(section);
 
         if (version is not null)
-            await RebuildPlainTextAsync(version);
+        {
+            var remainingSections = (await LoadSectionsAsync(version))
+                .Where(candidate => candidate.Id != section.Id)
+                .ToList();
+            RebuildPlainText(version, remainingSections);
+        }
 
-        await db.SaveChangesAsync();
+        await unitOfWork.SaveChangesAsync();
     }
 
-    private async Task RebuildPlainTextAsync(ResumeVersion version)
-    {
-        var sections = await db.ResumeSections
+    private Task<List<ResumeSection>> LoadSectionsAsync(ResumeVersion version) =>
+        sections.Query()
             .Where(x => x.UserId == version.UserId && x.ResumeVersionId == version.Id)
-            .OrderBy(x => x.SortOrder)
             .ToListAsync();
 
+    private static void RebuildPlainText(ResumeVersion version, IReadOnlyCollection<ResumeSection> currentSections)
+    {
         var parts = new List<string>();
-        foreach (var section in sections)
+        foreach (var section in currentSections.OrderBy(x => x.SortOrder))
         {
             var text = ExtractTextFromJson(section.ContentJson);
             if (!string.IsNullOrWhiteSpace(text))
@@ -154,9 +156,6 @@ public sealed class ResumeSectionService(JobPilotDbContext db)
                 parts.Add("");
             }
         }
-
-        if (!string.IsNullOrWhiteSpace(version.PlainText) && !parts.Any())
-            return; // keep existing if no sections
 
         version.PlainText = string.Join("\n", parts).Trim();
         version.UpdatedAt = DateTimeOffset.UtcNow;

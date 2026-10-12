@@ -8,7 +8,7 @@ namespace JobPilot.Api.Tests;
 public class OperationalHealthServiceTests
 {
     [Fact]
-    public async Task GetAsync_ReportsConnectedExtensionAndCleanCommandQueue()
+    public async Task GetAsync_WarnsThatExtensionTargetWasRemoved()
     {
         await using var db = CreateDb();
         var userId = Guid.NewGuid();
@@ -22,56 +22,15 @@ public class OperationalHealthServiceTests
             IsActive = true,
             IsDefault = true
         });
-        db.BrowserExtensionSessions.Add(new BrowserExtensionSession
-        {
-            Id = Guid.NewGuid(),
-            UserId = userId,
-            Status = "connected",
-            ExtensionVersion = "0.1.4",
-            IsSupportedPage = true,
-            CurrentUrl = "https://www.linkedin.com/jobs/view/123/",
-            LastHeartbeatAt = DateTimeOffset.UtcNow
-        });
-        await db.SaveChangesAsync();
-
-        var result = await CreateService(db).GetAsync(userId);
-
-        Assert.Equal("ok", result.Status);
-        Assert.Contains(result.Signals, signal => signal.Key == "executor" && signal.Status == "ok");
-        Assert.Contains(result.Signals, signal => signal.Key == "commands" && signal.Status == "ok");
-    }
-
-    [Fact]
-    public async Task GetAsync_WarnsWhenExtensionIsOutdatedAndCommandIsStale()
-    {
-        await using var db = CreateDb();
-        var userId = Guid.NewGuid();
-        var sessionId = Guid.NewGuid();
-        db.BrowserExtensionSessions.Add(new BrowserExtensionSession
-        {
-            Id = sessionId,
-            UserId = userId,
-            Status = "connected",
-            ExtensionVersion = "0.1.0",
-            LastHeartbeatAt = DateTimeOffset.UtcNow
-        });
-        db.BrowserExtensionCommandJobs.Add(new BrowserExtensionCommandJob
-        {
-            Id = Guid.NewGuid(),
-            UserId = userId,
-            BrowserExtensionSessionId = sessionId,
-            Type = "observe",
-            Status = "claimed",
-            ClaimedAt = DateTimeOffset.UtcNow.AddMinutes(-2)
-        });
         await db.SaveChangesAsync();
 
         var result = await CreateService(db).GetAsync(userId);
 
         Assert.Equal("attention", result.Status);
-        Assert.Equal(1, result.Metrics.StaleExtensionCommands);
-        Assert.Contains(result.Signals, signal => signal.Key == "executor" && signal.Status == "warning");
-        Assert.Contains(result.Signals, signal => signal.Key == "commands" && signal.Status == "warning");
+        Assert.Contains(result.Signals, signal => signal.Key == "executor" && signal.Status == "warning" && signal.Label.Contains("removida"));
+        Assert.Contains(result.Signals, signal => signal.Key == "commands" && signal.Status == "ok");
+        Assert.Equal(0, result.Metrics.PendingExtensionCommands);
+        Assert.Equal(0, result.Metrics.StaleExtensionCommands);
     }
 
     [Fact]
@@ -255,5 +214,5 @@ public class OperationalHealthServiceTests
     }
 
     private static OperationalHealthService CreateService(JobPilotDbContext db) =>
-        new(db, new ApplicationLimitService(db));
+        new(db, TestServices.ApplicationLimitService(db));
 }

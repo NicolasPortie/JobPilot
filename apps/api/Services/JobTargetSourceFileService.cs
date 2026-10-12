@@ -15,14 +15,18 @@ public sealed class JobTargetSourceFileService(IWebHostEnvironment environment)
 
     public async Task<SavedJobTargetSourceFile> SaveAsync(Guid userId, IFormFile file)
     {
+        if (file is null)
+            throw new InvalidOperationException("Envie uma imagem ou PDF da vaga.");
         if (file.Length <= 0)
             throw new InvalidOperationException("Arquivo vazio.");
         if (file.Length > 10 * 1024 * 1024)
-            throw new InvalidOperationException("Arquivo muito grande. Envie imagem ou PDF de ate 10 MB.");
+            throw new InvalidOperationException("Arquivo muito grande. Envie imagem ou PDF de até 10 MB.");
 
         var extension = Path.GetExtension(file.FileName);
         if (!AllowedExtensions.TryGetValue(extension, out var mediaType))
-            throw new InvalidOperationException("Formato invalido. Use PNG, JPG, WEBP ou PDF.");
+            throw new InvalidOperationException("Formato inválido. Use PNG, JPG, WEBP ou PDF.");
+
+        await UploadFilePolicy.ValidateSignatureAsync(file, extension);
 
         var root = string.IsNullOrWhiteSpace(environment.ContentRootPath)
             ? Directory.GetCurrentDirectory()
@@ -32,8 +36,29 @@ public sealed class JobTargetSourceFileService(IWebHostEnvironment environment)
 
         var safeName = $"{DateTimeOffset.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
         var path = Path.Combine(directory, safeName);
-        await using var stream = File.Create(path);
-        await file.CopyToAsync(stream);
+        try
+        {
+            await using var stream = File.Create(path);
+            await file.CopyToAsync(stream);
+        }
+        catch
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+            throw;
+        }
+
+        try
+        {
+            if (extension.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+                UploadFilePolicy.ValidatePdfReadable(path);
+        }
+        catch
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+            throw;
+        }
 
         return new SavedJobTargetSourceFile(path, mediaType, file.FileName);
     }

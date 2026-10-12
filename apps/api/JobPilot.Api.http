@@ -4,3 +4,37 @@ GET {{JobPilot.Api_HostAddress}}/health
 Accept: application/json
 
 ###
+
+POST {{JobPilot.Api_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "seu-email-local@example.com",
+  "password": "sua-senha-local"
+}
+
+###
+
+GET {{JobPilot.Api_HostAddress}}/api/profile
+Authorization: Bearer <token>
+Accept: application/json
+
+###
+
+GET {{JobPilot.Api_HostAddress}}/api/job-targets
+Authorization: Bearer <token>
+Accept: application/json
+
+###
+
+GET {{JobPilot.Api_HostAddress}}/api/resume/documents
+Authorization: Bearer <token>
+Accept: application/json
+
+###
+
+GET {{JobPilot.Api_HostAddress}}/api/profile/retention
+Authorization: Bearer <token>
+Accept: application/json
+
+###

@@ -6,7 +6,6 @@ namespace JobPilot.Api.Services;
 
 public sealed class OperationalHealthService
 {
-    private const string RequiredExtensionVersion = "0.1.4";
     private readonly JobPilotDbContext _db;
     private readonly ApplicationLimitService _limits;
 
@@ -19,8 +18,6 @@ public sealed class OperationalHealthService
     public async Task<OperationalHealthResponse> GetAsync(Guid userId)
     {
         var now = DateTimeOffset.UtcNow;
-        var extensionCutoff = now.AddSeconds(-90);
-        var staleCommandCutoff = now.AddSeconds(-45);
         var staleRunCutoff = now.AddHours(-2);
         var staleJobCutoff = now.AddMinutes(-10);
 
@@ -33,28 +30,9 @@ public sealed class OperationalHealthService
         var executionTarget = ExecutionTargets.Normalize(policy?.ExecutionTarget);
         var dailyLimit = await _limits.GetDailySnapshotAsync(userId, policy);
 
-        var extension = await _db.BrowserExtensionSessions
-            .Where(x => x.UserId == userId && x.Status != "revoked")
-            .OrderByDescending(x => x.LastHeartbeatAt != null && x.LastHeartbeatAt >= extensionCutoff)
-            .ThenByDescending(x => x.LastHeartbeatAt ?? x.CreatedAt)
-            .FirstOrDefaultAsync();
-
-        var pendingCommands = 0;
-        var staleCommands = 0;
-        if (executionTarget == ExecutionTargets.Extension && extension is not null)
-        {
-            pendingCommands = await _db.BrowserExtensionCommandJobs.CountAsync(x =>
-                x.UserId == userId &&
-                x.BrowserExtensionSessionId == extension.Id &&
-                x.Status == "pending");
-
-            staleCommands = await _db.BrowserExtensionCommandJobs.CountAsync(x =>
-                x.UserId == userId &&
-                x.BrowserExtensionSessionId == extension.Id &&
-                x.Status == "claimed" &&
-                x.ClaimedAt != null &&
-                x.ClaimedAt < staleCommandCutoff);
-        }
+        // A extensão do navegador foi removida do produto: sem sessões, sem fila de comandos.
+        const int pendingCommands = 0;
+        const int staleCommands = 0;
 
         var openCheckpoints = await _db.Checkpoints.CountAsync(x => x.UserId == userId && x.ResolutionStatus == "open");
         var queuedApplications = await _db.ApplicationJobs.CountAsync(x => x.UserId == userId && x.State == JobStatuses.QueuedToApply);
@@ -66,8 +44,8 @@ public sealed class OperationalHealthService
         var policySignal = BuildPolicySignal(policy);
         var limit = BuildLimitSignal(dailyLimit);
         var ai = BuildAiSignal(defaultProvider);
-        var executor = BuildExecutorSignal(executionTarget, extension, extensionCutoff);
-        var commands = BuildCommandSignal(executionTarget, pendingCommands, staleCommands);
+        var executor = BuildExecutorSignal(executionTarget);
+        var commands = BuildCommandSignal();
         var maintenance = BuildMaintenanceSignal(staleAgentRuns, staleApplicationJobs);
         var queue = BuildQueueSignal(queuedApplications, openCheckpoints, runningAgentRuns);
 
@@ -156,43 +134,23 @@ public sealed class OperationalHealthService
         return new HealthSignal("ai", "ok", label, provider.BaseUrl);
     }
 
-    private static HealthSignal BuildExecutorSignal(string executionTarget, BrowserExtensionSession? session, DateTimeOffset liveCutoff)
+    private static HealthSignal BuildExecutorSignal(string executionTarget)
     {
         if (executionTarget == ExecutionTargets.LocalDedicatedBrowser)
             return new HealthSignal("executor", "ok", "Navegador local dedicado", "O piloto usa um perfil separado do JobPilot.");
 
         if (executionTarget == ExecutionTargets.RemoteBrowser)
-            return new HealthSignal("executor", "warning", "Worker remoto indisponivel", "Use extensao ou navegador local dedicado neste MVP.");
+            return new HealthSignal("executor", "warning", "Worker remoto indisponivel", "Use o navegador local dedicado neste MVP.");
 
         if (executionTarget == ExecutionTargets.ServerConnector)
-            return new HealthSignal("executor", "warning", "Conector server-side indisponivel", "Use extensao ou navegador local dedicado neste MVP.");
+            return new HealthSignal("executor", "warning", "Conector server-side indisponivel", "Use o navegador local dedicado neste MVP.");
 
-        if (session is null)
-            return new HealthSignal("executor", "warning", "Extensao nao pareada", "Abra a extensao no Chrome e clique em conectar.");
-
-        var connected = session.LastHeartbeatAt is not null && session.LastHeartbeatAt >= liveCutoff;
-        if (!connected)
-            return new HealthSignal("executor", "warning", "Extensao sem heartbeat", "Abra o Chrome ou clique em atualizar na extensao.");
-
-        if (!IsVersionAtLeast(session.ExtensionVersion, RequiredExtensionVersion))
-            return new HealthSignal("executor", "warning", $"Extensao desatualizada: {DisplayVersion(session.ExtensionVersion)}", $"Recarregue a versao {RequiredExtensionVersion} em chrome://extensions.");
-
-        var page = session.IsSupportedPage ? "aba suportada" : "fora de pagina suportada";
-        return new HealthSignal("executor", "ok", $"Extensao conectada ({page})", session.CurrentUrl);
+        return new HealthSignal("executor", "warning", "Extensao removida do produto", "A extensão do navegador foi removida. Selecione o navegador local dedicado na politica do agente.");
     }
 
-    private static HealthSignal BuildCommandSignal(string executionTarget, int pendingCommands, int staleCommands)
+    private static HealthSignal BuildCommandSignal()
     {
-        if (executionTarget != ExecutionTargets.Extension)
-            return new HealthSignal("commands", "ok", "Fila da extensao inativa", "Executor atual nao depende da fila de comandos da extensao.");
-
-        if (staleCommands > 0)
-            return new HealthSignal("commands", "warning", $"{staleCommands} comando(s) travado(s)", "A extensao vai reenfileirar comandos antigos automaticamente.");
-
-        if (pendingCommands > 0)
-            return new HealthSignal("commands", "warning", $"{pendingCommands} comando(s) aguardando extensao", "Mantenha o Chrome aberto para executar a fila.");
-
-        return new HealthSignal("commands", "ok", "Fila da extensao limpa", "");
+        return new HealthSignal("commands", "ok", "Fila da extensao inativa", "A extensão do navegador foi removida do produto.");
     }
 
     private static HealthSignal BuildMaintenanceSignal(int staleAgentRuns, int staleApplicationJobs)
@@ -230,30 +188,6 @@ public sealed class OperationalHealthService
         if (severities.All(x => x == "idle")) return "idle";
         return "ok";
     }
-
-    private static bool IsVersionAtLeast(string value, string minimum)
-    {
-        var currentParts = ParseVersion(value);
-        var minimumParts = ParseVersion(minimum);
-        for (var index = 0; index < Math.Max(currentParts.Length, minimumParts.Length); index++)
-        {
-            var current = index < currentParts.Length ? currentParts[index] : 0;
-            var required = index < minimumParts.Length ? minimumParts[index] : 0;
-            if (current > required) return true;
-            if (current < required) return false;
-        }
-
-        return true;
-    }
-
-    private static int[] ParseVersion(string value) =>
-        (value ?? "")
-            .Split('.', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-            .Select(part => int.TryParse(part, out var number) ? number : 0)
-            .ToArray();
-
-    private static string DisplayVersion(string version) =>
-        string.IsNullOrWhiteSpace(version) ? "desconhecida" : version;
 }
 
 public sealed record OperationalHealthResponse(

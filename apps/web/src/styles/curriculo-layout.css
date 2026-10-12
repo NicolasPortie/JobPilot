@@ -1,0 +1,391 @@
+/* ==========================================================================
+   JobPilot — Currículo / Adaptação por vaga — ESTRUTURA E COMPONENTES
+   Etapa 3 img-to-html (modo compacto: a tela deve caber sem scroll em
+   viewports com altura >= ~900px — a própria referência tem ~950px).
+   Tudo escopado sob body.cv-fundo (só aba Currículo).
+   ========================================================================== */
+
+body.cv-fundo {
+  font-family: var(--cv-sans);
+  color: var(--cv-ink);
+}
+
+/* ---------- Layout da página (ocupa a largura, sem sobra lateral) ---------- */
+body.cv-fundo .jp-app-shell {
+  background: transparent;
+}
+
+body.cv-fundo .jp-main-content {
+  max-width: none;
+  margin-inline: 0;
+}
+
+.cv-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.cv-main {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  align-content: start;
+}
+
+/* rail em sub-grid: prévia alta + pilha de 3 minis (prévia preenche a altura) */
+.cv-rail {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+  align-content: start;
+  align-items: stretch;
+}
+
+.cv-railhead {
+  grid-column: 1 / -1;
+}
+
+.cv-rail__stack {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-content: start;
+}
+
+.cv-checklist {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #efe0c8;
+  display: grid;
+  gap: 9px;
+}
+
+.cv-checklist__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #241b12;
+}
+
+.cv-checklist__row--pending {
+  color: #857263;
+  font-weight: 500;
+}
+
+/* ---------- NAV fixa (desktop) ---------- */
+body.cv-fundo .jp-sidebar {
+  background: #f7efe0;
+  border-right: 1px solid #ead9be;
+  padding: 20px 14px 0;
+  overflow: hidden;
+}
+
+@media (min-width: 1024px) {
+  body.cv-fundo .jp-app-shell {
+    display: block;
+  }
+
+  body.cv-fundo .jp-app-shell > main {
+    width: auto;
+    margin-left: 248px;
+    padding-top: 20px;
+    padding-bottom: 12px;
+  }
+
+  body.cv-fundo .jp-sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 10px;
+    width: 238px;
+    height: 100dvh;
+    z-index: 40;
+  }
+}
+
+.cv-s-brand {
+  padding: 0 10px;
+}
+
+.cv-s-brand__logo {
+  font-family: var(--cv-serif);
+  font-weight: 700;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+  color: var(--cv-ink);
+  line-height: 1;
+}
+
+.cv-s-brand__tag {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #857263;
+}
+
+.cv-s-nav {
+  margin-top: 20px;
+  display: grid;
+  gap: 4px;
+}
+
+.cv-s-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  border-radius: 12px;
+  padding: 8px 12px;
+  color: var(--cv-ink);
+  transition: background 150ms ease;
+}
+
+.cv-s-item:hover {
+  background: rgb(188 74 33 / 0.07);
+}
+
+.cv-s-item--active {
+  background: #f6e2cb;
+}
+
+.cv-s-item__icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: #6d3a1c;
+  flex-shrink: 0;
+}
+
+.cv-s-item__label {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+}
+
+.cv-s-item__desc {
+  display: block;
+  font-size: 11px;
+  color: #857263;
+  margin-top: 1px;
+}
+
+/* card8 — perfil completo */
+.cv-s-profile {
+  margin-top: 16px;
+  background: #fffdf8;
+  border: 1px solid #efe0c8;
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.cv-s-profile__title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.005em;
+}
+
+.cv-s-profile__bar {
+  height: 7px;
+  border-radius: 999px;
+  background: #ecdfc6;
+  margin-top: 10px;
+  overflow: hidden;
+}
+
+.cv-s-profile__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #43a467, #2f9e5f);
+}
+
+.cv-s-profile__text {
+  margin-top: 9px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: #857263;
+}
+
+.cv-s-profile__link {
+  margin-top: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--cv-brand);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cv-s-profile__link:hover {
+  color: var(--cv-brand-strong);
+}
+
+.cv-s-foot {
+  margin-top: 14px;
+  display: grid;
+  gap: 2px;
+}
+
+.cv-s-art {
+  margin: 18px -14px 0;
+  min-height: 150px;
+  padding: 4px 24px 22px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  background:
+    url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 140' preserveAspectRatio='none'%3e%3cpath d='M0 78 Q40 50 82 68 T162 62 T240 72 V140 H0 Z' fill='%23f2d2b1'/%3e%3cpath d='M0 96 Q52 68 104 88 T204 82 T240 92 V140 H0 Z' fill='%23e5a173'/%3e%3cpath d='M0 114 Q62 92 124 110 T240 106 V140 H0 Z' fill='%23c06844'/%3e%3c/svg%3e")
+    bottom / 100% 132px no-repeat;
+}
+
+.cv-s-art__text {
+  font-family: var(--cv-serif);
+  font-size: 16px;
+  line-height: 1.42;
+  color: var(--cv-ink);
+  max-width: 168px;
+}
+
+.cv-s-art__rule {
+  width: 26px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--cv-brand);
+  margin-top: 10px;
+}
+
+/* ---------- TOPBAR + HERO na mesma linha (como na referência) ---------- */
+.cv-pagehead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 18px;
+}
+
+body.cv-fundo .jp-topbar {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.cv-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 2px;
+}
+
+.cv-topbanner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: linear-gradient(100deg, #fce4cb 0%, #f7d0ab 58%, #f2b98c 100%);
+  border-radius: 14px;
+  padding: 6px 6px 6px 22px;
+  min-width: 340px;
+  min-height: 60px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ilustração SVG própria (Etapa 4); a foto real entra aqui quando houver crop */
+.cv-topbanner__photo {
+  margin-left: auto;
+  align-self: stretch;
+  width: 160px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #dfa273;
+}
+
+.cv-topbanner__text {
+  font-family: var(--cv-serif);
+  font-size: 16px;
+  line-height: 1.3;
+  color: #8a3c16;
+  position: relative;
+  z-index: 1;
+  white-space: nowrap;
+}
+
+.cv-userchip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fffdf8;
+  border: 1px solid #efe0c8;
+  border-radius: 999px;
+  padding: 5px 14px 5px 5px;
+  max-width: 250px;
+  min-height: 60px;
+}
+
+.cv-userchip__avatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #b5441c;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.cv-userchip__name {
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.005em;
+}
+
+.cv-userchip__role {
+  font-size: 10.5px;
+  color: #857263;
+  margin-top: 1px;
+}
+
+/* ---------- HERO ---------- */
+.cv-hero {
+  padding: 2px 4px 0;
+}
+
+.cv-eyebrow {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  color: #bc4a21;
+}
+
+.cv-h1 {
+  font-family: var(--cv-serif);
+  font-weight: 700;
+  font-size: clamp(28px, 2.4vw, 38px);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: #241b12;
+  margin-top: 8px;
+}
+
+.cv-lead {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #6f6252;
+  max-width: 620px;
+}
+

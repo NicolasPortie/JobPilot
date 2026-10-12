@@ -1,3 +1,4 @@
+using JobPilot.Api.Application;
 using JobPilot.Api.Data;
 using JobPilot.Api.Domain;
 using Microsoft.EntityFrameworkCore;
@@ -25,22 +26,22 @@ public sealed class AgentTaskQueueService
         _resumePreparation = resumePreparation;
     }
 
-    public async Task<IResult> GetTaskAsync(Guid userId, Guid taskId)
+    public async Task<ServiceResult<AgentTaskResponse>> GetTaskAsync(Guid userId, Guid taskId)
     {
         var task = await _db.ApplicationJobs.Include(x => x.JobLead).FirstOrDefaultAsync(x => x.UserId == userId && x.Id == taskId);
-        if (task is null) return Results.NotFound();
+        if (task is null) return ServiceResult<AgentTaskResponse>.NotFound();
 
         var profile = await _db.CandidateProfiles.FirstOrDefaultAsync(x => x.UserId == userId);
         var answers = await _db.ReusableAnswers.Where(x => x.UserId == userId).ToListAsync();
-        return Results.Ok(new AgentTaskResponse(task, task.JobLead!, profile, answers));
+        return ServiceResult<AgentTaskResponse>.Ok(AgentTaskResponse.From(task, task.JobLead!, profile, answers));
     }
 
-    public async Task<IResult> GetNextTaskAsync(Guid userId)
+    public async Task<ServiceResult<AgentTaskResponse>> GetNextTaskAsync(Guid userId)
     {
         if (await GetPausedPolicyAsync(userId) is not null)
         {
             await RecordPolicyPausedAsync(userId, "agent.next_task");
-            return Results.NoContent();
+            return ServiceResult<AgentTaskResponse>.NoContent();
         }
 
         var limit = await _limits.GetDailySnapshotAsync(userId);
@@ -54,7 +55,7 @@ public sealed class AgentTaskQueueService
                 Detail = $"Daily application limit reached: appliedToday={limit.AppliedToday}; limit={limit.DailyLimit}."
             });
             await _db.SaveChangesAsync();
-            return Results.NoContent();
+            return ServiceResult<AgentTaskResponse>.NoContent();
         }
 
         var profile = await _db.CandidateProfiles.FirstOrDefaultAsync(x => x.UserId == userId);
@@ -68,7 +69,7 @@ public sealed class AgentTaskQueueService
                 .OrderBy(x => x.CreatedAt)
                 .FirstOrDefaultAsync();
 
-            if (task is null) return Results.NoContent();
+            if (task is null) return ServiceResult<AgentTaskResponse>.NoContent();
 
             if (task.JobLead is not null)
             {
@@ -102,11 +103,11 @@ public sealed class AgentTaskQueueService
             task.State = JobStatuses.Opening;
             if (task.JobLead is not null) task.JobLead.Status = JobStatuses.Opening;
             await _db.SaveChangesAsync();
-            return Results.Ok(new AgentTaskResponse(task, task.JobLead!, profile, answers));
+            return ServiceResult<AgentTaskResponse>.Ok(AgentTaskResponse.From(task, task.JobLead!, profile, answers));
         }
     }
 
-    public async Task<IResult> SaveDiscoveredJobsAsync(Guid userId, DiscoveredJobsRequest request)
+    public async Task<ServiceResult<DiscoveredJobsResult>> SaveDiscoveredJobsAsync(Guid userId, DiscoveredJobsRequest request)
     {
         var profile = await _db.CandidateProfiles.FirstOrDefaultAsync(x => x.UserId == userId);
         var filter = await _filterService.GetOrCreateAsync(userId);
@@ -118,7 +119,7 @@ public sealed class AgentTaskQueueService
 
         foreach (var item in request.Jobs)
         {
-            if (IsInvalidDiscoveredJob(item))
+            if (DiscoveredJobMapper.IsInvalid(item))
             {
                 ignored++;
                 continue;
@@ -126,7 +127,7 @@ public sealed class AgentTaskQueueService
 
             var existing = await _db.JobLeads.FirstOrDefaultAsync(x => x.UserId == userId && x.Url == item.Url);
             var lead = existing ?? item.ToLead(userId);
-            var protectedStatus = existing is not null && IsProtectedStatus(existing.Status) ? existing.Status : null;
+            var protectedStatus = existing is not null && DiscoveredJobMapper.IsProtectedStatus(existing.Status) ? existing.Status : null;
 
             if (existing is not null)
             {
@@ -168,7 +169,7 @@ public sealed class AgentTaskQueueService
             {
                 reviewed++;
                 var review = await _ai.ReviewJobFitAsync(userId, lead, profile, filter);
-                ApplySearchReview(lead, review);
+                DiscoveredJobMapper.ApplyReview(lead, review);
 
                 if (lead.Status == JobStatuses.Ignored)
                 {
@@ -199,91 +200,27 @@ public sealed class AgentTaskQueueService
         }
 
         await _db.SaveChangesAsync();
-        return Results.Ok(new { saved, ignored, reviewed });
+        return ServiceResult<DiscoveredJobsResult>.Ok(new DiscoveredJobsResult(saved, ignored, reviewed));
     }
 
-    private static bool IsProtectedStatus(string status) =>
-        status is JobStatuses.Applied
-            or JobStatuses.QueuedToApply
-            or JobStatuses.Opening
-            or JobStatuses.Filling
-            or JobStatuses.ReadyForSubmit
-            or JobStatuses.ManualOnly
-            or JobStatuses.NeedsReview;
-
-    private static bool IsInvalidDiscoveredJob(DiscoveredJobDto item)
-    {
-        if (string.IsNullOrWhiteSpace(item.Title) || string.IsNullOrWhiteSpace(item.Url))
-            return true;
-
-        var normalizedTitle = RemoveDiacritics(item.Title).ToLowerInvariant();
-        return normalizedTitle.Contains("volte a experimentar o premium", StringComparison.Ordinal) ||
-               normalizedTitle.Contains("experimente o premium", StringComparison.Ordinal) ||
-               normalizedTitle.Contains("try premium", StringComparison.Ordinal) ||
-               normalizedTitle.Contains("premium gratis", StringComparison.Ordinal) ||
-               normalizedTitle.Contains("premium free", StringComparison.Ordinal);
-    }
-
-    private static string RemoveDiacritics(string value)
-    {
-        var normalized = (value ?? "").Normalize(System.Text.NormalizationForm.FormD);
-        return new string(normalized.Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark).ToArray());
-    }
-
-    private static void ApplySearchReview(JobLead lead, JobFitReviewResponse review)
-    {
-        var reason = $"search_harness: {review.Reason}";
-        var details = BuildSearchReviewDetails(review);
-
-        lead.Score = review.FitScore;
-        lead.ScoreReason = string.IsNullOrWhiteSpace(details)
-            ? reason
-            : $"{reason}; {details}";
-
-        switch (review.Decision)
-        {
-            case "ignore":
-                lead.Status = JobStatuses.Ignored;
-                lead.FilteredReason = reason;
-                break;
-            case "review":
-                lead.Status = JobStatuses.NeedsReview;
-                lead.FilteredReason = reason;
-                break;
-            default:
-                lead.Status = JobStatuses.Scored;
-                lead.FilteredReason = "";
-                break;
-        }
-    }
-
-    private static string BuildSearchReviewDetails(JobFitReviewResponse review)
-    {
-        var parts = new List<string>
-        {
-            $"fit={review.FitScore}",
-            $"confidence={review.Confidence:0.00}",
-            $"seniority={review.DetectedSeniority}",
-            $"workplace={review.DetectedWorkplace}",
-            $"apply={review.ApplyType}"
-        };
-
-        if (review.Strengths.Length > 0) parts.Add("strengths=" + string.Join(", ", review.Strengths));
-        if (review.Risks.Length > 0) parts.Add("risks=" + string.Join(", ", review.Risks));
-        return string.Join("; ", parts);
-    }
-
-    public async Task<IResult> AutoQueueAsync(Guid userId)
+    public async Task<ServiceResult<AutoQueueResult>> AutoQueueAsync(Guid userId)
     {
         if (await GetPausedPolicyAsync(userId) is not null)
         {
             await RecordPolicyPausedAsync(userId, "agent.auto_queue");
-            return Results.Ok(new { queued = 0, total = 0, paused = true });
+            return ServiceResult<AutoQueueResult>.Ok(new AutoQueueResult(0, 0, Paused: true));
         }
 
         var limit = await _limits.GetDailySnapshotAsync(userId);
         if (limit.IsReached)
-            return Results.Ok(new { queued = 0, total = 0, dailyLimitReached = true, limit.DailyLimit, limit.AppliedToday, limit.RemainingToday });
+            return ServiceResult<AutoQueueResult>.Ok(
+                new AutoQueueResult(
+                    0,
+                    0,
+                    DailyLimitReached: true,
+                    DailyLimit: limit.DailyLimit,
+                    AppliedToday: limit.AppliedToday,
+                    RemainingToday: limit.RemainingToday));
 
         var profile = await _db.CandidateProfiles.FirstOrDefaultAsync(x => x.UserId == userId);
         var filter = await _filterService.GetOrCreateAsync(userId);
@@ -336,13 +273,13 @@ public sealed class AgentTaskQueueService
         await _db.SaveChangesAsync();
         if (queuedTaskIds.Count > 0)
             await _resumePreparation.PrepareQueuedAsync(userId, queuedTaskIds);
-        return Results.Ok(new { queued, total = leads.Count });
+        return ServiceResult<AutoQueueResult>.Ok(new AutoQueueResult(queued, leads.Count));
     }
 
-    public async Task<IResult> UpdateStateAsync(Guid userId, Guid taskId, AgentStateRequest request)
+    public async Task<ServiceResult<ApplicationJobResponse>> UpdateStateAsync(Guid userId, Guid taskId, AgentStateRequest request)
     {
         var task = await _db.ApplicationJobs.Include(x => x.JobLead).FirstOrDefaultAsync(x => x.Id == taskId && x.UserId == userId);
-        if (task is null) return Results.NotFound();
+        if (task is null) return ServiceResult<ApplicationJobResponse>.NotFound();
 
         var previousState = task.State;
         task.State = request.State;
@@ -364,13 +301,13 @@ public sealed class AgentTaskQueueService
         }
 
         await _db.SaveChangesAsync();
-        return Results.Ok(task);
+        return ServiceResult<ApplicationJobResponse>.Ok(ApplicationJobResponse.From(task));
     }
 
-    public async Task<IResult> UpdateApplySurfaceAsync(Guid userId, Guid taskId, ApplySurfaceRequest request)
+    public async Task<ServiceResult<JobLeadResponse>> UpdateApplySurfaceAsync(Guid userId, Guid taskId, ApplySurfaceRequest request)
     {
         var task = await _db.ApplicationJobs.Include(x => x.JobLead).FirstOrDefaultAsync(x => x.Id == taskId && x.UserId == userId);
-        if (task?.JobLead is null) return Results.NotFound();
+        if (task?.JobLead is null) return ServiceResult<JobLeadResponse>.NotFound();
 
         task.JobLead.ApplyPlatform = Normalize(request.ApplyPlatform, "unknown");
         task.JobLead.ApplySurface = Normalize(request.ApplySurface, "unknown");
@@ -378,7 +315,7 @@ public sealed class AgentTaskQueueService
         task.JobLead.AutomationSupport = Normalize(request.AutomationSupport, "unknown");
         task.JobLead.AutomationReason = request.AutomationReason ?? "";
         await _db.SaveChangesAsync();
-        return Results.Ok(task.JobLead);
+        return ServiceResult<JobLeadResponse>.Ok(JobLeadResponse.From(task.JobLead));
     }
 
     private static bool IsSupportedApplyPlatformForQueue(JobLead lead, JobFilter filter, out string reason)

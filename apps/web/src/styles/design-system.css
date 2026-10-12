@@ -1,0 +1,486 @@
+/* ==========================================================================
+   JobPilot Design System
+   Modern operational UI for daily job-search automation work.
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals — whiter, slate-based palette */
+  --jp-bg: #f8fafc;
+  --jp-bg-strong: #f1f5f9;
+  --jp-surface: #ffffff;
+  --jp-surface-subtle: #f8fafc;
+  --jp-surface-muted: #f1f5f9;
+  --jp-surface-raised: #ffffff;
+  --jp-border: #e2e8f0;
+  --jp-border-strong: #cbd5e1;
+
+  --jp-ink: #0f172a;
+  --jp-text-primary: #0f172a;
+  --jp-text-secondary: #475569;
+  --jp-text-tertiary: #94a3b8;
+
+  /* Primary — teal / petroleum (energy, growth, trust) */
+  --jp-primary-50: #ecfdf5;
+  --jp-primary-100: #ccfbf1;
+  --jp-primary-200: #99f6e4;
+  --jp-primary-400: #2dd4bf;
+  --jp-primary-500: #14b8a6;
+  --jp-primary-600: #0f766e;
+  --jp-primary-700: #115e59;
+  --jp-primary-800: #0b4843;
+
+  /* Accent — warm terracotta (human review, calls to action) */
+  --jp-accent-50: #fff0eb;
+  --jp-accent-100: #ffd9cf;
+  --jp-accent-400: #ee927b;
+  --jp-accent-500: #e2775d;
+  --jp-accent-600: #c96047;
+  --jp-accent-700: #a74735;
+
+  /* Highlight — warm amber / orange (opportunity, momentum) */
+  --jp-highlight-50: #fff7ed;
+  --jp-highlight-100: #ffedd5;
+  --jp-highlight-400: #fb923c;
+  --jp-highlight-500: #f97316;
+  --jp-highlight-600: #ea580c;
+
+  /* Sky — bright cyan/blue (insight, signal) */
+  --jp-sky-50: #ecfeff;
+  --jp-sky-100: #cffafe;
+  --jp-sky-400: #22d3ee;
+  --jp-sky-500: #06b6d4;
+  --jp-sky-600: #0891b2;
+
+  /* Premium navy / ink surfaces */
+  --jp-navy: #0f172a;
+  --jp-navy-600: #1e293b;
+
+  /* Signature gradients (used sparingly, on hero surfaces + key CTAs) */
+  --jp-gradient-brand: linear-gradient(135deg, #0f766e 0%, #0d9488 42%, #0891b2 100%);
+  --jp-gradient-primary: linear-gradient(135deg, #0d9488 0%, #0f766e 48%, #0e7490 100%);
+  --jp-gradient-accent: linear-gradient(135deg, #c96047 0%, #a74735 100%);
+  --jp-gradient-hero: linear-gradient(140deg, #0b1220 0%, #0f3b3a 46%, #134e6b 100%);
+  --jp-gradient-warm: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+
+  /* Status colors (standardized, vibrant) */
+  --jp-success: #22c55e;
+  --jp-success-strong: #16a34a;
+  --jp-success-bg: #dcfce7;
+  --jp-warning: #f59e0b;
+  --jp-warning-strong: #d97706;
+  --jp-warning-bg: #fef3c7;
+  --jp-danger: #ef4444;
+  --jp-danger-strong: #dc2626;
+  --jp-danger-bg: #fee2e2;
+  --jp-info: #0ea5e9;
+  --jp-info-strong: #0284c7;
+  --jp-info-bg: #e0f2fe;
+
+  --jp-shadow-xs: 0 1px 2px rgb(15 23 42 / 0.05);
+  --jp-shadow-sm: 0 4px 14px rgb(15 23 42 / 0.07);
+  --jp-shadow-md: 0 14px 34px rgb(15 23 42 / 0.1);
+  --jp-shadow-primary: 0 1px 2px rgb(15 23 42 / 0.12), 0 10px 24px rgb(13 148 136 / 0.34);
+  --jp-shadow-accent: 0 1px 2px rgb(15 23 42 / 0.12), 0 10px 24px rgb(201 96 71 / 0.32);
+
+  --jp-ring-primary: 0 0 0 3px rgb(20 184 166 / 0.22);
+
+  --jp-radius-sm: 6px;
+  --jp-radius-md: 8px;
+  --jp-radius-lg: 10px;
+  --jp-radius-xl: 12px;
+
+  --jp-transition-fast: 150ms ease;
+  --jp-transition-base: 200ms ease;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--jp-bg);
+  background-image:
+    radial-gradient(1100px 560px at 102% -8%, rgb(20 184 166 / 0.12), transparent 58%),
+    radial-gradient(960px 520px at -6% 4%, rgb(201 96 71 / 0.08), transparent 56%),
+    radial-gradient(820px 460px at 60% 116%, rgb(249 115 22 / 0.07), transparent 60%);
+  background-attachment: fixed;
+  color: var(--jp-text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+button:disabled,
+select:disabled,
+input:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.jp-main-content {
+  width: 100%;
+  max-width: min(1600px, calc(100vh * 16 / 9));
+  margin-inline: auto;
+}
+
+.jp-card {
+  background: var(--jp-surface);
+  border: 1px solid var(--jp-border);
+  border-radius: var(--jp-radius-xl);
+  box-shadow: var(--jp-shadow-xs);
+  transition: border-color var(--jp-transition-base), box-shadow var(--jp-transition-base);
+}
+
+.jp-card:hover {
+  border-color: var(--jp-border-strong);
+  box-shadow: var(--jp-shadow-sm);
+}
+
+.jp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  padding-inline: 0.875rem;
+  position: relative;
+  isolation: isolate;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.jp-btn > svg,
+button > svg {
+  flex-shrink: 0;
+}
+
+.jp-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.jp-btn:disabled {
+  opacity: 0.56;
+  box-shadow: none;
+  text-shadow: none;
+  transform: none;
+}
+
+.jp-btn--primary {
+  background: var(--jp-gradient-primary);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: var(--jp-shadow-primary), inset 0 1px 0 rgb(255 255 255 / 0.22);
+}
+
+.jp-btn--primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #10a99c 0%, #0f8077 48%, #0e8aaa 100%);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.12), 0 14px 30px rgb(13 148 136 / 0.42), inset 0 1px 0 rgb(255 255 255 / 0.28);
+  transform: translateY(-1px);
+}
+
+.jp-btn--primary:active:not(:disabled) {
+  background: linear-gradient(135deg, #0d8275 0%, #0b605a 50%, #0b6f88 100%);
+  box-shadow: 0 1px 2px rgb(15 118 110 / 0.24);
+}
+
+.jp-btn--accent {
+  background: var(--jp-gradient-accent);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: var(--jp-shadow-accent), inset 0 1px 0 rgb(255 255 255 / 0.22);
+}
+
+.jp-btn--accent:hover:not(:disabled) {
+  background: linear-gradient(135deg, #d76e51 0%, #c96047 100%);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.12), 0 14px 30px rgb(201 96 71 / 0.42), inset 0 1px 0 rgb(255 255 255 / 0.28);
+  transform: translateY(-1px);
+}
+
+.jp-btn--accent:active:not(:disabled) {
+  background: linear-gradient(135deg, #a74735 0%, #93392a 100%);
+  box-shadow: 0 1px 2px rgb(201 96 71 / 0.24);
+}
+
+.jp-btn--secondary {
+  background: var(--jp-surface);
+  color: var(--jp-text-primary);
+  border-color: var(--jp-border);
+  box-shadow: var(--jp-shadow-xs);
+}
+
+.jp-btn--secondary:hover:not(:disabled) {
+  border-color: var(--jp-border-strong);
+  background: var(--jp-surface-subtle);
+  box-shadow: var(--jp-shadow-sm);
+  transform: translateY(-1px);
+}
+
+.jp-btn--ghost {
+  color: var(--jp-text-secondary);
+}
+
+.jp-btn--ghost:hover:not(:disabled) {
+  background: var(--jp-surface-subtle);
+  color: var(--jp-text-primary);
+}
+
+.jp-btn:focus-visible,
+button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(15 118 110 / 0.22), var(--jp-shadow-xs);
+}
+
+.jp-btn--danger {
+  background: var(--jp-danger);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.08), 0 6px 16px rgb(239 68 68 / 0.22);
+}
+
+.jp-btn--danger:hover:not(:disabled) {
+  background: var(--jp-danger-strong);
+  transform: translateY(-1px);
+}
+
+.jp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.jp-badge--blue {
+  background: var(--jp-info-bg);
+  color: #0369a1;
+  border-color: #bae6fd;
+}
+
+.jp-badge--green {
+  background: var(--jp-success-bg);
+  color: #15803d;
+  border-color: #bbf7d0;
+}
+
+.jp-badge--amber {
+  background: var(--jp-warning-bg);
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.jp-badge--red {
+  background: var(--jp-danger-bg);
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.jp-badge--slate {
+  background: var(--jp-surface-muted);
+  color: var(--jp-text-secondary);
+  border-color: var(--jp-border);
+}
+
+.jp-badge--teal {
+  background: var(--jp-primary-50);
+  color: var(--jp-primary-700);
+  border-color: var(--jp-primary-100);
+}
+
+.jp-badge--violet {
+  background: var(--jp-accent-50);
+  color: var(--jp-accent-700);
+  border-color: var(--jp-accent-100);
+}
+
+.jp-badge--sky {
+  background: var(--jp-sky-50);
+  color: var(--jp-sky-600);
+  border-color: var(--jp-sky-100);
+}
+
+.jp-badge--solid-teal {
+  background: var(--jp-gradient-primary);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 4px 10px rgb(13 148 136 / 0.28);
+}
+
+.jp-input {
+  width: 100%;
+  min-height: 2.625rem;
+  border: 1px solid var(--jp-border);
+  border-radius: 10px;
+  background: var(--jp-surface);
+  color: var(--jp-text-primary);
+  padding: 0 0.8rem;
+  font-size: 0.9rem;
+  outline: none;
+  transition: var(--jp-transition-fast);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.03);
+}
+
+.jp-input::placeholder {
+  color: var(--jp-text-tertiary);
+}
+
+.jp-input:hover {
+  border-color: var(--jp-border-strong);
+}
+
+.jp-input:focus {
+  border-color: var(--jp-primary-600);
+  box-shadow: var(--jp-ring-primary);
+}
+
+select.jp-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.65rem center;
+  background-repeat: no-repeat;
+  background-size: 1.25rem;
+  padding-right: 2.25rem;
+}
+
+textarea.jp-input {
+  height: auto;
+  min-height: 6rem;
+  padding: 0.7rem 0.8rem;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.jp-input--sm {
+  min-height: 2.25rem;
+}
+
+.jp-input--file {
+  display: flex;
+  cursor: pointer;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px dashed var(--jp-border);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff, #fbfdff);
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  color: var(--jp-text-secondary);
+  transition: var(--jp-transition-fast);
+}
+
+.jp-input--file:hover {
+  border-color: var(--jp-primary-400);
+  background: var(--jp-primary-50);
+  color: var(--jp-primary-700);
+}
+
+.jp-checkbox {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  cursor: pointer;
+  appearance: none;
+  border: 1px solid var(--jp-border-strong);
+  border-radius: 5px;
+  background: #ffffff;
+  transition: var(--jp-transition-fast);
+}
+
+.jp-checkbox:checked {
+  border-color: var(--jp-primary-600);
+  background: var(--jp-primary-600);
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3e%3cpath fill='none' stroke='%23ffffff' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='M6 10l3 3l6-6'/%3e%3c/svg%3e");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 85%;
+}
+
+.jp-checkbox:focus-visible {
+  outline: none;
+  box-shadow: var(--jp-ring-primary);
+}
+
+.jp-section {
+  overflow: hidden;
+  border-radius: var(--jp-radius-xl);
+  border: 1px solid var(--jp-border);
+  background: var(--jp-surface);
+  box-shadow: var(--jp-shadow-xs);
+}
+
+.jp-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  border-bottom: 1px solid var(--jp-border);
+  background: var(--jp-surface-subtle);
+  padding: 0.875rem 1.25rem;
+}
+
+.jp-section-title {
+  font-size: 0.82rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--jp-text-tertiary);
+}
+
+.jp-empty-state {
+  display: grid;
+  min-height: 16rem;
+  place-items: center;
+  padding: 2rem;
+  text-align: center;
+}
+
+.jp-empty-state__icon {
+  display: grid;
+  width: 3.5rem;
+  height: 3.5rem;
+  place-items: center;
+  margin-inline: auto;
+  border-radius: 1rem;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--jp-surface), var(--jp-surface)) padding-box,
+    var(--jp-gradient-primary) border-box;
+  color: var(--jp-primary-600);
+  box-shadow: 0 10px 24px rgb(13 148 136 / 0.16);
+  margin-bottom: 1rem;
+}
+
+.jp-empty-state__title {
+  font-size: 1rem;
+  font-weight: 900;
+  color: var(--jp-text-primary);
+}
+
+.jp-empty-state__desc {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--jp-text-secondary);
+}
+
+.jp-card--hover {
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.jp-card--hover:hover {
+  border-color: var(--jp-border-strong);
+  box-shadow: var(--jp-shadow-sm);
+  transform: translateY(-1px);
+}

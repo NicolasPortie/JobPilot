@@ -1,7 +1,9 @@
 import { api } from './client'
+import type { JobTargetDetail } from '../types'
+import type { OrganizeJobTargetRequest } from './contracts'
 
 export const jobTargetClient = {
-  organize: (payload: unknown) => api.post('/job-targets/organize', payload),
+  organize: (payload: OrganizeJobTargetRequest) => api.post<JobTargetDetail>('/job-targets/organize', payload),
   organizeScreenshot: (payload: FormData, query = 'useAi=true') =>
-    api.post(`/job-targets/organize-screenshot?${query}`, payload),
+    api.post<JobTargetDetail>(`/job-targets/organize-screenshot?${query}`, payload),
 }

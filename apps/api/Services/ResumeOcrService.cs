@@ -51,20 +51,28 @@ public sealed class ResumeOcrService
                 CreateNoWindow = true
             };
             process.Start();
+            if (!WaitForExitOrKill(process, 30000))
+                return new ResumeOcrResult("", 0, ["Tesseract excedeu o tempo limite de 30 segundos."], false);
             var output = process.StandardOutput.ReadToEnd();
             var error = process.StandardError.ReadToEnd();
-            process.WaitForExit(30000);
 
             var txtPath = $"{outputBase}.txt";
-            if (process.ExitCode == 0 && File.Exists(txtPath))
+            try
             {
-                var text = File.ReadAllText(txtPath);
-                File.Delete(txtPath);
-                var wordCount = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
-                return new ResumeOcrResult(text, wordCount, [], true);
-            }
+                if (process.ExitCode == 0 && File.Exists(txtPath))
+                {
+                    var text = File.ReadAllText(txtPath);
+                    var wordCount = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
+                    return new ResumeOcrResult(text, wordCount, [], true);
+                }
 
-            return new ResumeOcrResult("", 0, [$"Tesseract falhou: {error}"], false);
+                return new ResumeOcrResult("", 0, [$"Tesseract falhou: {error}"], false);
+            }
+            finally
+            {
+                TryDelete(txtPath);
+                TryDelete(outputBase);
+            }
         }
         catch (Exception ex)
         {
@@ -88,20 +96,27 @@ public sealed class ResumeOcrService
                 CreateNoWindow = true
             };
             process.Start();
+            if (!WaitForExitOrKill(process, 60000))
+                return new ResumeOcrResult("", 0, ["OCRmyPDF excedeu o tempo limite de 60 segundos."], false);
             var output = process.StandardOutput.ReadToEnd();
             var error = process.StandardError.ReadToEnd();
-            process.WaitForExit(60000);
 
-            if (process.ExitCode == 0 && File.Exists(outputPath))
+            try
             {
-                // Extract text from the OCRed PDF using PdfPig
-                var text = ExtractTextFromPdf(outputPath);
-                File.Delete(outputPath);
-                var wordCount = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
-                return new ResumeOcrResult(text, wordCount, [], true);
-            }
+                if (process.ExitCode == 0 && File.Exists(outputPath))
+                {
+                    // Extract text from the OCRed PDF using PdfPig
+                    var text = ExtractTextFromPdf(outputPath);
+                    var wordCount = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
+                    return new ResumeOcrResult(text, wordCount, [], true);
+                }
 
-            return new ResumeOcrResult("", 0, [$"OCRmyPDF falhou: {error}"], false);
+                return new ResumeOcrResult("", 0, [$"OCRmyPDF falhou: {error}"], false);
+            }
+            finally
+            {
+                TryDelete(outputPath);
+            }
         }
         catch (Exception ex)
         {
@@ -115,13 +130,44 @@ public sealed class ResumeOcrService
         {
             var sb = new System.Text.StringBuilder();
             using var document = UglyToad.PdfPig.PdfDocument.Open(path);
-            foreach (var page in document.GetPages())
+            foreach (var page in document.GetPages().Take(40))
                 sb.AppendLine(page.Text ?? "");
             return sb.ToString();
         }
         catch
         {
             return "";
+        }
+    }
+
+    private static bool WaitForExitOrKill(Process process, int timeoutMilliseconds)
+    {
+        if (process.WaitForExit(timeoutMilliseconds))
+            return true;
+
+        try
+        {
+            process.Kill(entireProcessTree: true);
+            process.WaitForExit(2000);
+        }
+        catch
+        {
+            // The process may have exited between the timeout and Kill.
+        }
+
+        return false;
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch
+        {
+            // Temporary cleanup must not hide the extraction result.
         }
     }
 

@@ -42,7 +42,7 @@ if (options.ShowHelp)
     return;
 }
 
-var client = new JobPilotApiClient(options.ApiBaseUrl, options.Token);
+using var client = new JobPilotApiClient(options.ApiBaseUrl, options.Token);
 var navigator = new LinkedInNavigator(options, client);
 var resolver = new LocalAnswerResolver(client);
 var usesExtension = options.BrowserDriverMode.Equals("extension", StringComparison.OrdinalIgnoreCase);

@@ -9,8 +9,54 @@ public sealed class LinkedInLoginService
 
     public LinkedInLoginService(AgentOptions options) => _options = options;
 
+    public async Task<bool> HasPersistedSessionAsync(IPage page)
+    {
+        try
+        {
+            var cookies = await page.Context.CookiesAsync(["https://www.linkedin.com", "https://www.linkedin.com/"]);
+            return cookies.Any(c =>
+                c.Name.Equals("li_at", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(c.Value));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[LoginCheck] Erro ao ler cookies: {ex.Message}");
+            return false;
+        }
+    }
+
+    public async Task<bool> HasAuthenticatedNavAsync(IPage page)
+    {
+        try
+        {
+            var navCount = await page.Locator(
+                "[data-control-name='identity_welcome_message'], .global-nav__me, .global-nav__me-content, img.global-nav__me-photo, a.global-nav__primary-link[href*='/in/']").CountAsync();
+            return navCount > 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public async Task<bool> NeedsLoginAsync(IPage page)
     {
+        if (await HasPersistedSessionAsync(page))
+        {
+            if (await HasAuthenticatedNavAsync(page))
+            {
+                Console.WriteLine("[LoginCheck] Sessao autenticada (cookie li_at + navegacao logada).");
+                return false;
+            }
+
+            var jobLinks = await page.Locator("a[href*='/jobs/view/']").CountAsync();
+            if (jobLinks > 0 && !page.Url.Contains("/login", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine("[LoginCheck] Sessao autenticada (cookie li_at + resultados de vagas visiveis).");
+                return false;
+            }
+        }
+
         if (page.Url.Contains("/login", StringComparison.OrdinalIgnoreCase))
         {
             Console.WriteLine("[LoginCheck] URL contains /login");
@@ -26,11 +72,14 @@ public sealed class LinkedInLoginService
         {
             var visibleText = await PageObserver.GetVisibleTextAsync(page);
             var hasEntre = visibleText.Contains("Entre para ver quem", StringComparison.OrdinalIgnoreCase);
-            var hasEntrarCadastro = visibleText.Contains("Entrar", StringComparison.OrdinalIgnoreCase) &&
+            var hasLoginCadastro = visibleText.Contains("Login", StringComparison.OrdinalIgnoreCase) &&
                                     visibleText.Contains("Cadastre-se agora", StringComparison.OrdinalIgnoreCase);
-            Console.WriteLine($"[LoginCheck] textCheck: hasEntre={hasEntre}, hasEntrarCadastro={hasEntrarCadastro}");
+            Console.WriteLine($"[LoginCheck] textCheck: hasEntre={hasEntre}, hasLoginCadastro={hasLoginCadastro}");
 
-            if ((hasEntre || hasEntrarCadastro) && page.Url.Contains("linkedin.com/jobs", StringComparison.OrdinalIgnoreCase))
+            // Banner de visitante sozinho nao exige login se a sessao persistida ainda e valida.
+            if ((hasEntre || hasLoginCadastro) &&
+                page.Url.Contains("linkedin.com/jobs", StringComparison.OrdinalIgnoreCase) &&
+                !await HasPersistedSessionAsync(page))
             {
                 var easyApplyCount = await page.Locator(LinkedInSelectors.EasyApplyButton).CountAsync();
                 Console.WriteLine($"[LoginCheck] EasyApply buttons={easyApplyCount}");
@@ -42,9 +91,10 @@ public sealed class LinkedInLoginService
             Console.WriteLine($"[LoginCheck] Error reading body text: {ex.Message}");
         }
 
-        if (page.Url.Contains("linkedin.com/jobs", StringComparison.OrdinalIgnoreCase))
+        if (page.Url.Contains("linkedin.com/jobs", StringComparison.OrdinalIgnoreCase) &&
+            !await HasPersistedSessionAsync(page))
         {
-            var headerSignIn = await page.Locator("header a[href*='login'], .nav__button-secondary:has-text('Entrar'), [data-tracking-control-name*='signin']").CountAsync();
+            var headerSignIn = await page.Locator("header a[href*='login'], .nav__button-secondary:has-text('Login'), [data-tracking-control-name*='signin']").CountAsync();
             var easyApplyCount = await page.Locator(LinkedInSelectors.EasyApplyButton).CountAsync();
             Console.WriteLine($"[LoginCheck] headerSignIn={headerSignIn}, easyApply={easyApplyCount}");
             if (headerSignIn > 0 && easyApplyCount == 0) return true;
@@ -60,7 +110,7 @@ public sealed class LinkedInLoginService
         var loginPassword = password ?? _options.LinkedInPassword;
         if (string.IsNullOrWhiteSpace(loginEmail) || string.IsNullOrWhiteSpace(loginPassword))
         {
-            Console.WriteLine("[Login] Credenciais não configuradas.");
+            Console.WriteLine("[Login] Credenciais automaticas nao disponiveis (email/senha ausentes).");
             return false;
         }
 
@@ -97,5 +147,22 @@ public sealed class LinkedInLoginService
             Console.WriteLine($"[Login] Erro: {ex.Message}");
             return false;
         }
+    }
+
+    public async Task<bool> TryRestorePersistedSessionAsync(IPage page, string returnUrl)
+    {
+        if (!await HasPersistedSessionAsync(page))
+            return false;
+
+        Console.WriteLine("[Login] Tentando reativar sessao persistida via feed...");
+        await page.GotoAsync("https://www.linkedin.com/feed/", new PageGotoOptions { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 30000 });
+        await page.WaitForTimeoutAsync(2500);
+
+        if (await NeedsLoginAsync(page))
+            return false;
+
+        await page.GotoAsync(returnUrl, new PageGotoOptions { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 30000 });
+        await page.WaitForTimeoutAsync(2500);
+        return !await NeedsLoginAsync(page);
     }
 }

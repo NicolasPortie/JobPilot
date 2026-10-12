@@ -1,0 +1,71 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-jobpilot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-jobpilot}
+    volumes:
+      - jobpilot_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jobpilot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-jobpilot};Username=${POSTGRES_USER:-jobpilot};Password=${POSTGRES_PASSWORD}
+      Auth__JwtKey: ${JOBPILOT_JWT_KEY:?JOBPILOT_JWT_KEY is required}
+      Auth__SeedEmail: ${JOBPILOT_BOOTSTRAP_EMAIL:?JOBPILOT_BOOTSTRAP_EMAIL is required}
+      Auth__SeedPassword: ${JOBPILOT_BOOTSTRAP_PASSWORD:?JOBPILOT_BOOTSTRAP_PASSWORD is required}
+      Security__SecretKey: ${JOBPILOT_SECRET_KEY:?JOBPILOT_SECRET_KEY is required}
+      Frontend__Origins: ${JOBPILOT_FRONTEND_ORIGINS:-http://localhost:8080}
+      Bootstrap__Country: ${JOBPILOT_BOOTSTRAP_COUNTRY:-}
+      Bootstrap__TargetRole: ${JOBPILOT_BOOTSTRAP_TARGET_ROLE:-}
+      Database__ApplyMigrationsOnStartup: "true"
+      # Seed ligado só no primeiro boot para criar o usuário inicial.
+      # Desligue após o primeiro login e rode backup antes de migrations destrutivas.
+      Database__SeedOnStartup: ${JOBPILOT_SEED_ON_STARTUP:-false}
+      Database__RepairLegacyMigrationHistory: "false"
+      Ai__AllowedHosts: ${Ai__AllowedHosts:-}
+    volumes:
+      - jobpilot_documents:/app/documents
+      - jobpilot_sources:/app/storage
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/health/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${JOBPILOT_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  jobpilot_pgdata:
+  jobpilot_documents:
+  jobpilot_sources:

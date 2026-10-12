@@ -1,3 +1,4 @@
+using JobPilot.Api.Application;
 using JobPilot.Api.Data;
 using JobPilot.Api.Domain;
 using JobPilot.Api.Services;
@@ -10,7 +11,7 @@ namespace JobPilot.Api.Tests;
 public class AutomationProcessServiceTests
 {
     [Fact]
-    public async Task StartApplyAsync_DefaultExtensionDriverRequiresConnectedExtension()
+    public async Task StartApplyAsync_DefaultExtensionDriverIsRejectedAsRemoved()
     {
         await using var db = CreateDb();
         var userId = Guid.NewGuid();
@@ -25,9 +26,9 @@ public class AutomationProcessServiceTests
 
             var result = await service.StartApplyAsync(userId, new AutomationApplyRequest(true, 1));
 
-            Assert.Contains("BadRequest", result.GetType().Name);
-            var value = Assert.IsAssignableFrom<IValueHttpResult>(result).Value;
-            Assert.Contains("extensao", System.Text.Json.JsonSerializer.Serialize(value), StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(ServiceResultStatus.Invalid, result.Status);
+            Assert.Contains("removida", result.Error, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(await db.ExecutionEvents.ToListAsync(), x => x.EventType == "automation.extension.removed");
         }
         finally
         {
@@ -57,16 +58,90 @@ public class AutomationProcessServiceTests
 
             var result = await service.StartDiscoverAsync(userId, new AutomationDiscoverRequest(".NET", "Brazil", 10));
 
-            Assert.Contains("Ok", result.GetType().Name);
-            var value = Assert.IsAssignableFrom<IValueHttpResult>(result).Value;
-            var json = System.Text.Json.JsonSerializer.Serialize(value);
-            Assert.Contains("paused", json);
+            Assert.Equal(ServiceResultStatus.Ok, result.Status);
+            Assert.True(result.Value?.Paused);
             Assert.Contains("automation.policy.paused", (await db.ExecutionEvents.SingleAsync()).EventType);
         }
         finally
         {
             Environment.SetEnvironmentVariable("JOBPILOT_EXECUTION_TARGET", previousTarget);
         }
+    }
+
+    [Fact]
+    public async Task StartDiscoverAsync_LocalDedicatedBrowserExigeCredencialSalva()
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        db.Users.Add(new AppUser { Id = userId, Email = "user@test.local", PasswordHash = "hash" });
+        db.AgentPolicies.Add(new AgentPolicy
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            ExecutionTarget = ExecutionTargets.LocalDedicatedBrowser
+        });
+        await db.SaveChangesAsync();
+        var previousTarget = Environment.GetEnvironmentVariable("JOBPILOT_EXECUTION_TARGET");
+        Environment.SetEnvironmentVariable("JOBPILOT_EXECUTION_TARGET", null);
+        try
+        {
+            var service = CreateService(db);
+
+            var result = await service.StartDiscoverAsync(userId, new AutomationDiscoverRequest(".NET", "Brazil", 10));
+
+            Assert.Equal(ServiceResultStatus.Invalid, result.Status);
+            Assert.Contains("credencial", result.Error, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("automation.credential.missing", (await db.ExecutionEvents.SingleAsync()).EventType);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("JOBPILOT_EXECUTION_TARGET", previousTarget);
+        }
+    }
+
+    [Fact]
+    public async Task ValidatePlatformCredentialReadyAsync_RetornaNullQuandoCredencialAtivaExiste()
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        db.PlatformCredentials.Add(new PlatformCredential
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Platform = "linkedin",
+            AccountEmail = "user@test.local",
+            EncryptedPassword = "protected",
+            IsActive = true
+        });
+        await db.SaveChangesAsync();
+
+        var readiness = new AutomationReadinessService(db);
+        var result = await readiness.ValidatePlatformCredentialReadyAsync(userId, "linkedin", "buscar vagas");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task ValidatePlatformCredentialReadyAsync_RejeitaQuandoCredencialInativa()
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        db.PlatformCredentials.Add(new PlatformCredential
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Platform = "linkedin",
+            AccountEmail = "user@test.local",
+            EncryptedPassword = "protected",
+            IsActive = false
+        });
+        await db.SaveChangesAsync();
+
+        var readiness = new AutomationReadinessService(db);
+        var result = await readiness.ValidatePlatformCredentialReadyAsync(userId, "linkedin", "buscar vagas");
+
+        Assert.NotNull(result);
+        Assert.Equal(ServiceResultStatus.Invalid, result!.Status);
     }
 
     [Fact]
@@ -91,10 +166,8 @@ public class AutomationProcessServiceTests
 
             var result = await service.StartApplyAsync(userId, new AutomationApplyRequest(false, 10));
 
-            Assert.Contains("Ok", result.GetType().Name);
-            var value = Assert.IsAssignableFrom<IValueHttpResult>(result).Value;
-            var json = System.Text.Json.JsonSerializer.Serialize(value);
-            Assert.Contains("paused", json);
+            Assert.Equal(ServiceResultStatus.Ok, result.Status);
+            Assert.True(result.Value?.Paused);
             Assert.Contains("automation.policy.paused", (await db.ExecutionEvents.SingleAsync()).EventType);
         }
         finally
@@ -104,22 +177,12 @@ public class AutomationProcessServiceTests
     }
 
     [Fact]
-    public async Task StartApplyAsync_DefaultExtensionDriverRejectsOutdatedExtension()
+    public async Task StartApplyAsync_ExtensionTargetPointsToLocalDedicatedBrowser()
     {
         await using var db = CreateDb();
         var userId = Guid.NewGuid();
         db.Users.Add(new AppUser { Id = userId, Email = "user@test.local", PasswordHash = "hash" });
         db.AgentPolicies.Add(new AgentPolicy { Id = Guid.NewGuid(), UserId = userId });
-        db.BrowserExtensionSessions.Add(new BrowserExtensionSession
-        {
-            Id = Guid.NewGuid(),
-            UserId = userId,
-            Name = "Chrome local",
-            Status = "connected",
-            Browser = "chrome",
-            ExtensionVersion = "0.1.0",
-            LastHeartbeatAt = DateTimeOffset.UtcNow
-        });
         await db.SaveChangesAsync();
         var previous = Environment.GetEnvironmentVariable("JOBPILOT_AUTOMATION_BROWSER_DRIVER");
         Environment.SetEnvironmentVariable("JOBPILOT_AUTOMATION_BROWSER_DRIVER", null);
@@ -129,12 +192,9 @@ public class AutomationProcessServiceTests
 
             var result = await service.StartApplyAsync(userId, new AutomationApplyRequest(true, 1));
 
-            Assert.Contains("BadRequest", result.GetType().Name);
-            var value = Assert.IsAssignableFrom<IValueHttpResult>(result).Value;
-            var json = System.Text.Json.JsonSerializer.Serialize(value);
-            Assert.Contains("0.1.4", json);
-            Assert.Contains("Recarregue", json);
-            Assert.Contains("automation.extension.outdated", (await db.ExecutionEvents.SingleAsync()).EventType);
+            Assert.Equal(ServiceResultStatus.Invalid, result.Status);
+            Assert.Contains("navegador local dedicado", result.Error, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(await db.ExecutionEvents.ToListAsync(), x => x.EventType == "automation.extension.removed");
         }
         finally
         {
@@ -150,17 +210,7 @@ public class AutomationProcessServiceTests
         var leadId = Guid.NewGuid();
         var applicationJobId = Guid.NewGuid();
         db.Users.Add(new AppUser { Id = userId, Email = "user@test.local", PasswordHash = "hash" });
-        db.AgentPolicies.Add(new AgentPolicy { Id = Guid.NewGuid(), UserId = userId });
-        db.BrowserExtensionSessions.Add(new BrowserExtensionSession
-        {
-            Id = Guid.NewGuid(),
-            UserId = userId,
-            Name = "Chrome local",
-            Status = "connected",
-            Browser = "chrome",
-            ExtensionVersion = "0.1.4",
-            LastHeartbeatAt = DateTimeOffset.UtcNow
-        });
+        db.AgentPolicies.Add(new AgentPolicy { Id = Guid.NewGuid(), UserId = userId, ExecutionTarget = ExecutionTargets.LocalDedicatedBrowser });
         db.JobLeads.Add(new JobLead
         {
             Id = leadId,
@@ -196,7 +246,7 @@ public class AutomationProcessServiceTests
 
             var result = await service.StartApplyAsync(userId, new AutomationApplyRequest(false, 1));
 
-            Assert.Contains("Ok", result.GetType().Name);
+            Assert.Equal(ServiceResultStatus.Ok, result.Status);
             var job = await db.ApplicationJobs.Include(x => x.JobLead).SingleAsync(x => x.Id == applicationJobId);
             Assert.Equal(JobStatuses.NeedsReview, job.State);
             Assert.Equal("agent_interrupted", job.Reason);
@@ -216,17 +266,7 @@ public class AutomationProcessServiceTests
         var userId = Guid.NewGuid();
         var leadId = Guid.NewGuid();
         db.Users.Add(new AppUser { Id = userId, Email = "user@test.local", PasswordHash = "hash" });
-        db.AgentPolicies.Add(new AgentPolicy { Id = Guid.NewGuid(), UserId = userId });
-        db.BrowserExtensionSessions.Add(new BrowserExtensionSession
-        {
-            Id = Guid.NewGuid(),
-            UserId = userId,
-            Name = "Chrome local",
-            Status = "connected",
-            Browser = "chrome",
-            ExtensionVersion = "0.1.4",
-            LastHeartbeatAt = DateTimeOffset.UtcNow
-        });
+        db.AgentPolicies.Add(new AgentPolicy { Id = Guid.NewGuid(), UserId = userId, ExecutionTarget = ExecutionTargets.LocalDedicatedBrowser });
         db.CandidateProfiles.Add(new CandidateProfile
         {
             Id = Guid.NewGuid(),
@@ -257,7 +297,7 @@ public class AutomationProcessServiceTests
 
             var result = await service.StartApplyAsync(userId, new AutomationApplyRequest(false, 1));
 
-            Assert.Contains("Ok", result.GetType().Name);
+            Assert.Equal(ServiceResultStatus.Ok, result.Status);
             Assert.False(await db.ApplicationJobs.AnyAsync());
             Assert.Equal(JobStatuses.ReadyForSubmit, (await db.JobLeads.SingleAsync(x => x.Id == leadId)).Status);
         }
@@ -290,8 +330,8 @@ public class AutomationProcessServiceTests
 
             var result = await service.StartApplyAsync(userId, new AutomationApplyRequest(false, 1));
 
-            Assert.Contains("Ok", result.GetType().Name);
-            var value = Assert.IsAssignableFrom<IValueHttpResult>(result).Value;
+            Assert.Equal(ServiceResultStatus.Ok, result.Status);
+            var value = result.Value;
             var json = System.Text.Json.JsonSerializer.Serialize(value);
             Assert.Contains(ExecutionTargets.LocalDedicatedBrowser, json);
             Assert.Contains("playwright", json);
@@ -335,10 +375,8 @@ public class AutomationProcessServiceTests
 
             var result = await service.StartApplyAsync(userId, new AutomationApplyRequest(false, 10));
 
-            Assert.Contains("Ok", result.GetType().Name);
-            var value = Assert.IsAssignableFrom<IValueHttpResult>(result).Value;
-            var json = System.Text.Json.JsonSerializer.Serialize(value);
-            Assert.Contains("dailyLimitReached", json);
+            Assert.Equal(ServiceResultStatus.Ok, result.Status);
+            Assert.True(result.Value?.DailyLimitReached);
             Assert.Contains("automation.apply.daily_limit_reached", (await db.ExecutionEvents.OrderBy(x => x.OccurredAt).LastAsync()).EventType);
         }
         finally
@@ -381,11 +419,9 @@ public class AutomationProcessServiceTests
 
             var result = await service.StartApplyAsync(userId, new AutomationApplyRequest(false, 10));
 
-            Assert.Contains("Ok", result.GetType().Name);
-            var value = Assert.IsAssignableFrom<IValueHttpResult>(result).Value;
-            var json = System.Text.Json.JsonSerializer.Serialize(value);
-            Assert.Contains("alreadyRunning", json);
-            Assert.Contains(runId.ToString(), json);
+            Assert.Equal(ServiceResultStatus.Ok, result.Status);
+            Assert.True(result.Value?.AlreadyRunning);
+            Assert.Equal(runId, result.Value?.ActiveRunId);
             Assert.Contains("automation.apply.already_running", (await db.ExecutionEvents.SingleAsync()).EventType);
         }
         finally
@@ -432,7 +468,7 @@ public class AutomationProcessServiceTests
             var staleRun = await db.AgentRuns.SingleAsync(x => x.Id == runId);
             Assert.Equal("failed", staleRun.State);
             Assert.NotNull(staleRun.CompletedAt);
-            Assert.Contains("Ok", result.GetType().Name);
+            Assert.Equal(ServiceResultStatus.Ok, result.Status);
         }
         finally
         {
@@ -464,8 +500,8 @@ public class AutomationProcessServiceTests
 
             var result = await service.StartApplyAsync(userId, new AutomationApplyRequest(false, 1));
 
-            Assert.Contains("BadRequest", result.GetType().Name);
-            var value = Assert.IsAssignableFrom<IValueHttpResult>(result).Value;
+            Assert.Equal(ServiceResultStatus.Invalid, result.Status);
+            var value = result.Value;
             var json = System.Text.Json.JsonSerializer.Serialize(value);
             Assert.Contains(ExecutionTargets.RemoteBrowser, json);
             Assert.Contains("worker remoto", json);
@@ -494,6 +530,6 @@ public class AutomationProcessServiceTests
                 ["Jwt:Secret"] = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
             })
             .Build();
-        return new AutomationProcessService(db, new JwtTokenService(config), new JobFilterService(db), new ScoringService(), new ApplicationLimitService(db), new AutoApplyPolicyService(db));
+        return new AutomationProcessService(db, TestServices.JwtTokenService(db, config), TestServices.JobFilterService(db), new ScoringService(), TestServices.ApplicationLimitService(db), TestServices.AutoApplyPolicyService(db), new AutomationReadinessService(db));
     }
 }

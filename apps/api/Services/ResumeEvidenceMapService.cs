@@ -1,13 +1,18 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using JobPilot.Api.Data;
 using JobPilot.Api.Domain;
+using JobPilot.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace JobPilot.Api.Services;
 
-public sealed class ResumeEvidenceMapService(JobPilotDbContext db)
+public sealed class ResumeEvidenceMapService(
+    IRepository<ResumeVersion> versions,
+    IRepository<JobTarget> targets,
+    IRepository<CandidateProfile> profiles,
+    IRepository<ResumeEvidenceMapRun> mapRuns,
+    IUnitOfWork unitOfWork)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -16,24 +21,26 @@ public sealed class ResumeEvidenceMapService(JobPilotDbContext db)
         ["c#", "csharp", ".net", "dotnet", "asp.net", "asp.net-core", "entity-framework", "ef-core"],
         ["javascript", "typescript", "react", "html", "html5", "css", "css3", "frontend"],
         ["api", "apis", "api-rest", "apis-rest", "rest", "backend", "integracoes", "integrações"],
-        ["sql", "postgresql", "postgres", "mysql", "banco-de-dados", "database"],
+        ["sql", "sql-server", "postgresql", "postgres", "mysql", "firebird", "mongodb", "banco-de-dados", "database"],
         ["qa", "testes", "testing", "selenium", "playwright", "automacao-de-testes", "automação-de-testes"],
-        ["docker", "containers", "kubernetes", "k8s"]
+        ["docker", "containers", "kubernetes", "k8s", "devops", "azure-devops", "ci-cd", "github-actions"],
+        ["rabbitmq", "mensageria", "filas", "integracoes", "backend", "apis", "api-rest"],
+        ["orientacao-a-objetos", "oop", "injecao-de-dependencia", "dependency-injection", "c#", "csharp", ".net", "dotnet", "asp.net-core"]
     ];
 
     public async Task<ResumeEvidenceMapDetail> BuildAsync(Guid userId, BuildResumeEvidenceMapRequest request)
     {
-        var version = await db.ResumeVersions
+        var version = await versions.Query()
             .Include(x => x.Sections)
             .FirstOrDefaultAsync(x => x.Id == request.ResumeVersionId && x.UserId == userId)
-            ?? throw new InvalidOperationException("Versao de curriculo nao encontrada.");
+            ?? throw new InvalidOperationException("Versão de currículo não encontrada.");
 
-        var target = await db.JobTargets
+        var target = await targets.Query()
             .Include(x => x.Requirements)
             .FirstOrDefaultAsync(x => x.Id == request.JobTargetId && x.UserId == userId)
-            ?? throw new InvalidOperationException("Vaga alvo nao encontrada.");
+            ?? throw new InvalidOperationException("Vaga alvo não encontrada.");
 
-        var profile = await db.CandidateProfiles.FirstOrDefaultAsync(x => x.UserId == userId);
+        var profile = await profiles.FirstOrDefaultAsync(x => x.UserId == userId);
         var corpus = BuildCorpus(version, profile);
         var run = new ResumeEvidenceMapRun
         {
@@ -56,14 +63,14 @@ public sealed class ResumeEvidenceMapService(JobPilotDbContext db)
         run.Status = score.Status;
         run.WarningsJson = JsonSerializer.Serialize(score.Warnings, JsonOptions);
 
-        db.ResumeEvidenceMapRuns.Add(run);
-        await db.SaveChangesAsync();
+        mapRuns.Add(run);
+        await unitOfWork.SaveChangesAsync();
         return ToDetail(run);
     }
 
     public async Task<ResumeEvidenceMapDetail?> GetAsync(Guid userId, Guid id)
     {
-        var run = await db.ResumeEvidenceMapRuns
+        var run = await mapRuns.Query()
             .Include(x => x.Items)
             .FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId);
         return run is null ? null : ToDetail(run);
@@ -87,8 +94,8 @@ public sealed class ResumeEvidenceMapService(JobPilotDbContext db)
 
         var status = requirement.Category is "education" or "language" or "certification" or "domain" ? "unknown" : "missing";
         var reason = status == "unknown"
-            ? "Requisito precisa de confirmacao do usuario antes de entrar no curriculo."
-            : "Nenhuma evidencia encontrada no perfil ou curriculo base.";
+            ? "Requisito precisa de confirmação do usuário antes de entrar no currículo."
+            : "Nenhuma evidência encontrada no perfil ou currículo base.";
         return BuildItem(userId, runId, requirement, order, status, "", "", reason, status == "unknown" ? 0.3m : 0.15m);
     }
 
@@ -169,7 +176,7 @@ public sealed class ResumeEvidenceMapService(JobPilotDbContext db)
             {
                 if (TryFindEvidence(corpus, adjacent, out var hit))
                 {
-                    evidence = hit with { Reason = $"Requisito '{term}' tem evidencia adjacente via '{adjacent}'." };
+                    evidence = hit with { Reason = $"Requisito '{term}' tem evidência adjacente via '{adjacent}'." };
                     return true;
                 }
             }
@@ -215,17 +222,15 @@ public sealed class ResumeEvidenceMapService(JobPilotDbContext db)
 
     private static bool ContainsTerm(string normalizedHaystack, string term)
     {
+        // Sempre com fronteira de token: substring pura gera falso "proven"
+        // (ex.: "java" dentro de "javascript"). Mesmo critério dos ATS reais.
         var normalizedTerm = NormalizeKeyword(term);
         if (string.IsNullOrWhiteSpace(normalizedTerm)) return false;
-        if (normalizedTerm.Length <= 3 || normalizedTerm.Any(ch => !char.IsLetterOrDigit(ch)))
-        {
-            var escaped = Regex.Escape(normalizedTerm)
-                .Replace("\\-", "[^a-z0-9]+")
-                .Replace("-", "[^a-z0-9]+");
-            var pattern = $@"(^|[^a-z0-9]){escaped}([^a-z0-9]|$)";
-            return Regex.IsMatch(normalizedHaystack, pattern, RegexOptions.IgnoreCase);
-        }
-        return normalizedHaystack.Contains(normalizedTerm);
+        var escaped = Regex.Escape(normalizedTerm)
+            .Replace("\\-", "[^a-z0-9]+")
+            .Replace("-", "[^a-z0-9]+");
+        var pattern = $@"(^|[^a-z0-9]){escaped}([^a-z0-9]|$)";
+        return Regex.IsMatch(normalizedHaystack, pattern, RegexOptions.IgnoreCase);
     }
 
     private static bool SameKeyword(string left, string right) => NormalizeKeyword(left) == NormalizeKeyword(right);

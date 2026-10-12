@@ -1,3 +1,4 @@
+using JobPilot.Agent.Domain;
 using JobPilot.Agent.Infrastructure;
 
 namespace JobPilot.Agent.Platforms.LinkedIn;
@@ -13,12 +14,54 @@ public sealed class LinkedInDiscoveryService
         _client = client;
     }
 
+    // geoIds estáveis do LinkedIn para localidades comuns. O parâmetro textual `location` sozinho
+    // costuma ser ignorado pelo LinkedIn (cai no padrão dos EUA); o geoId é o que de fato filtra.
+    // Mapa curado e pequeno de propósito (trade-off: cobrir os casos do usuário sem manter uma
+    // tabela gigante). Localidades não mapeadas ainda enviam o texto e funcionam melhor autenticado.
+    private static readonly Dictionary<string, string> GeoIds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["brasil"] = "106057199",
+        ["brazil"] = "106057199",
+        ["br"] = "106057199",
+        ["são paulo"] = "105871508",
+        ["sao paulo"] = "105871508",
+        ["são paulo, brasil"] = "105871508",
+        ["sao paulo, brazil"] = "105871508",
+        ["rio de janeiro"] = "105989723",
+        ["belo horizonte"] = "105818291",
+        ["curitiba"] = "104746682",
+        ["porto alegre"] = "104215772",
+        ["florianópolis"] = "105061994",
+        ["florianopolis"] = "105061994",
+        ["brasília"] = "105408110",
+        ["brasilia"] = "105408110",
+        ["portugal"] = "100364837",
+        ["estados unidos"] = "103644278",
+        ["united states"] = "103644278",
+    };
+
+    internal static string? ResolveGeoId(string? location)
+    {
+        if (string.IsNullOrWhiteSpace(location)) return null;
+        var normalized = AgentText.RemoveDiacritics(location.Trim()).ToLowerInvariant();
+        foreach (var (key, geoId) in GeoIds)
+        {
+            if (string.Equals(AgentText.RemoveDiacritics(key).ToLowerInvariant(), normalized, StringComparison.Ordinal))
+                return geoId;
+        }
+        return null;
+    }
+
     public async Task<string> BuildSearchUrlAsync()
     {
         var filter = await _client.GetJobFilterAsync();
         var query = Uri.EscapeDataString(_options.Keywords);
         var location = Uri.EscapeDataString(_options.Location);
         var url = $"https://www.linkedin.com/jobs/search/?keywords={query}&location={location}&f_TPR=r604800";
+
+        var geoId = ResolveGeoId(_options.Location);
+        if (geoId is not null)
+            url += $"&geoId={geoId}";
 
         var experienceLevels = new List<string>();
         if (filter?.AllowedSeniorities.Contains("entry") == true || filter?.AllowedSeniorities.Contains("associate") == true)

@@ -2,6 +2,11 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
+$legacyRuntime = [Environment]::GetEnvironmentVariable("JOBPILOT_ENABLE_LEGACY_RUNTIME", "Process")
+if ($legacyRuntime -ne "true") {
+  throw "O runtime legado esta desativado. O JobPilot nao envia candidaturas automaticamente."
+}
+
 $token = [Environment]::GetEnvironmentVariable("JOBPILOT_AGENT_TOKEN", "User")
 $apiUrl = [Environment]::GetEnvironmentVariable("JOBPILOT_API_URL", "User")
 $autoSubmit = [Environment]::GetEnvironmentVariable("JOBPILOT_AUTO_SUBMIT", "User")
@@ -17,7 +22,7 @@ if ([string]::IsNullOrWhiteSpace($apiUrl)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($autoSubmit)) {
-  $autoSubmit = "true"
+  $autoSubmit = "false"
 }
 
 if ([string]::IsNullOrWhiteSpace($maxApplications)) {

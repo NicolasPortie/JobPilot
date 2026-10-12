@@ -80,13 +80,7 @@ public class ApplicationRunServiceTests
     private static ApplicationRunService CreateService(JobPilotDbContext db, IConfiguration config)
     {
         var ai = new FakeAiChatService();
-        var preparation = new ApplicationResumePreparationService(
-            db,
-            new JobTargetService(db, ai, new HttpClient(), new ResumeOcrService()),
-            new ResumeTailoringService(db, new ResumeEvidenceMapService(db), ai),
-            new ResumeExportService(db, config),
-            new ApplicationResumeService(db));
-        return new ApplicationRunService(db, new JobFilterService(db), new ScoringService(), preparation);
+        return TestServices.ApplicationRunService(db, ai, config);
     }
 
     private static IConfiguration Config(string exportRoot) =>

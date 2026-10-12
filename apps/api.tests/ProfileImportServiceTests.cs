@@ -1,12 +1,12 @@
+using System.Net;
+using System.Text;
+using System.Text.Json;
 using JobPilot.Api.Data;
 using JobPilot.Api.Domain;
 using JobPilot.Api.Services;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
-using System.Net;
-using System.Text;
-using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 
 namespace JobPilot.Api.Tests;
 
@@ -51,7 +51,7 @@ public class ProfileImportServiceTests
         {
             var service = new ProfileImportService(db, new ResumeTextService(), new ResumeOcrService(), new FakeAiChatService(), new HttpClient());
 
-            var result = await service.ImportAsync(userId, new ProfileImportRequest(resumePath, FetchPublicLinks: false, UseAi: false));
+            var result = await service.ImportAsync(userId, new ProfileImportRequest(FetchPublicLinks: false, UseAi: false));
 
             Assert.Contains("Nicolas Portie", result.ExtractedText);
             Assert.Contains("ASP.NET Core", result.ExtractedText);
@@ -65,8 +65,8 @@ public class ProfileImportServiceTests
             Assert.Single(await db.ResumeImports.Where(x => x.UserId == userId).ToListAsync());
             var document = Assert.Single(await db.ResumeDocuments.Include(x => x.Versions).Where(x => x.UserId == userId).ToListAsync());
             var version = Assert.Single(document.Versions);
-            Assert.Contains("Curriculo base", document.Title);
-            Assert.Contains("Versao base", version.Title);
+            Assert.Contains("Currículo base", document.Title);
+            Assert.Contains("Versão base", version.Title);
             Assert.False(string.IsNullOrWhiteSpace(version.PlainText));
             Assert.Contains(await db.ResumeSections.Where(x => x.ResumeVersionId == version.Id).ToListAsync(), x => x.SectionType == "skills");
 
@@ -122,7 +122,7 @@ public class ProfileImportServiceTests
             }));
             var service = new ProfileImportService(db, new ResumeTextService(), new ResumeOcrService(), new FakeAiChatService(), http);
 
-            var result = await service.ImportAsync(userId, new ProfileImportRequest(resumePath, FetchPublicLinks: true, UseAi: false));
+            var result = await service.ImportAsync(userId, new ProfileImportRequest(FetchPublicLinks: true, UseAi: false));
 
             Assert.Contains("TypeScript", result.Profile.Skills);
             Assert.Contains("JavaScript", result.Profile.Skills);
@@ -167,7 +167,7 @@ public class ProfileImportServiceTests
         {
             var service = new ProfileImportService(db, new ResumeTextService(), new ResumeOcrService(), new FakeAiChatService(), new HttpClient());
 
-            await service.ImportAsync(userId, new ProfileImportRequest(resumePath, FetchPublicLinks: false, UseAi: false));
+            await service.ImportAsync(userId, new ProfileImportRequest(FetchPublicLinks: false, UseAi: false));
 
             Assert.Contains(await db.ReusableAnswers.ToListAsync(), x => x.QuestionKey == "typescript" && x.AnswerValue == "Sim");
             Assert.Contains(await db.ReusableAnswers.ToListAsync(), x => x.QuestionText.Contains("Spring Boot") && x.AnswerValue == "Sim");
@@ -205,7 +205,7 @@ public class ProfileImportServiceTests
         {
             var service = new ProfileImportService(db, new ResumeTextService(), new ResumeOcrService(), new FakeAiChatService(), new HttpClient());
 
-            var result = await service.ImportAsync(userId, new ProfileImportRequest(resumePath, FetchPublicLinks: false, UseAi: false));
+            var result = await service.ImportAsync(userId, new ProfileImportRequest(FetchPublicLinks: false, UseAi: false));
 
             Assert.Equal("txt", result.Extraction.SourceKind);
             Assert.Equal("plain_text", result.Extraction.ExtractionMethod);
@@ -231,7 +231,7 @@ public class ProfileImportServiceTests
         Assert.Equal("unreadable", result.Report.Classification);
         Assert.True(result.Report.RequiresOcr);
         Assert.True(result.Report.RequiresReview);
-        Assert.Contains(result.Report.Warnings, warning => warning.Contains("nao encontrado", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Report.Warnings, warning => warning.Contains("não encontrado", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -262,7 +262,7 @@ public class ProfileImportServiceTests
                 new HttpClient(),
                 _ => new ResumeOcrResult(ocrText, 160, [], true));
 
-            var result = await service.ImportAsync(userId, new ProfileImportRequest(resumePath, FetchPublicLinks: false, UseAi: false));
+            var result = await service.ImportAsync(userId, new ProfileImportRequest(FetchPublicLinks: false, UseAi: false));
 
             Assert.Equal("pdf", result.Extraction.SourceKind);
             Assert.Contains("+ocr", result.Extraction.ExtractionMethod);
@@ -320,14 +320,15 @@ public class ProfileImportServiceTests
             Assert.Equal("txt", result.Extraction.SourceKind);
             Assert.Contains("Nicolas Portie", result.ExtractedText);
             Assert.False(result.Extraction.RequiresOcr);
-            Assert.True(File.Exists(result.Profile.ResumePath));
-            Assert.Contains(userId.ToString("N"), result.Profile.ResumePath);
-            Assert.EndsWith(".txt", result.Profile.ResumePath, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain(" ", Path.GetFileName(result.Profile.ResumePath));
+            var storedProfile = await db.CandidateProfiles.SingleAsync(x => x.UserId == userId);
+            Assert.True(File.Exists(storedProfile.ResumePath));
+            Assert.Contains(userId.ToString("N"), storedProfile.ResumePath);
+            Assert.EndsWith(".txt", storedProfile.ResumePath, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(" ", Path.GetFileName(storedProfile.ResumePath));
 
             var import = Assert.Single(await db.ResumeImports.Where(x => x.UserId == userId).ToListAsync());
-            Assert.Equal(result.Profile.ResumePath, import.SourcePath);
-            Assert.Equal(Path.GetFileName(result.Profile.ResumePath), import.SourceFileName);
+            Assert.Equal(storedProfile.ResumePath, import.SourcePath);
+            Assert.Equal(Path.GetFileName(storedProfile.ResumePath), import.SourceFileName);
             Assert.Single(await db.ResumeDocuments.Where(x => x.UserId == userId).ToListAsync());
             Assert.Contains("ASP.NET Core", result.Profile.Skills);
             Assert.Contains("TypeScript", result.Profile.Skills);
@@ -351,7 +352,7 @@ public class ProfileImportServiceTests
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             service.ImportUploadAsync(Guid.NewGuid(), file, fetchPublicLinks: false, useAi: false));
 
-        Assert.Contains("Formato nao suportado", error.Message);
+        Assert.Contains("Formato não suportado", error.Message);
     }
 
 

@@ -20,7 +20,7 @@ public class AgentLearningServiceTests
     {
         await using var db = CreateDb();
         var userId = Guid.NewGuid();
-        var service = new AgentLearningService(db);
+        var service = TestServices.AgentLearningService(db);
 
         var learning = await service.UpsertCandidateAsync(userId, Request("technical", "linkedin.com", "combobox-select", "Combobox LinkedIn", "Custom dropdown handled.", "low"));
 
@@ -39,7 +39,7 @@ public class AgentLearningServiceTests
     {
         await using var db = CreateDb();
         var userId = Guid.NewGuid();
-        var service = new AgentLearningService(db);
+        var service = TestServices.AgentLearningService(db);
 
         var learning = await service.UpsertCandidateAsync(userId, Request("answer", "linkedin.com", "node-years", "Resposta sobre anos de experiencia", "Responder 2 anos para Node.js.", "low"));
 
@@ -57,7 +57,7 @@ public class AgentLearningServiceTests
     {
         await using var db = CreateDb();
         var userId = Guid.NewGuid();
-        var service = new AgentLearningService(db);
+        var service = TestServices.AgentLearningService(db);
 
         var learning = await service.UpsertCandidateAsync(userId, Request("technical", "linkedin.com", "click-botao", "Clique em botao", "Clique generico validado.", "low"));
 
@@ -74,7 +74,7 @@ public class AgentLearningServiceTests
     {
         await using var db = CreateDb();
         var userId = Guid.NewGuid();
-        var service = new AgentLearningService(db);
+        var service = TestServices.AgentLearningService(db);
 
         var learning = await service.UpsertCandidateAsync(userId, Request("technical", "linkedin.com", "pcd-question", "Campo PCD", "Pergunta sobre deficiencia.", "low"));
 
@@ -88,7 +88,7 @@ public class AgentLearningServiceTests
     {
         await using var db = CreateDb();
         var userId = Guid.NewGuid();
-        var service = new AgentLearningService(db);
+        var service = TestServices.AgentLearningService(db);
 
         var learning = await service.UpsertCandidateAsync(userId, Request("technical", "linkedin.com", "review-button", "Botao Revisar", "Controle Revisar antes de enviar candidatura.", "low"));
 
@@ -101,7 +101,7 @@ public class AgentLearningServiceTests
     {
         await using var db = CreateDb();
         var userId = Guid.NewGuid();
-        var service = new AgentLearningService(db);
+        var service = TestServices.AgentLearningService(db);
 
         await service.UpsertCandidateAsync(userId, Request("technical", "linkedin.com", "candidate", "Candidato", "Ainda nao validado.", "low"));
         var approved = await service.UpsertCandidateAsync(userId, Request("technical", "linkedin.com", "approved", "Aprovado", "Validado por humano.", "low"));
@@ -119,7 +119,7 @@ public class AgentLearningServiceTests
     {
         await using var db = CreateDb();
         var userId = Guid.NewGuid();
-        var service = new AgentLearningService(db);
+        var service = TestServices.AgentLearningService(db);
         var learning = await service.UpsertCandidateAsync(userId, Request("technical", "linkedin.com", "avoid-back", "Evitar Voltar", "Botao Voltar nao deve ser usado para enviar.", "low"));
         await service.ReviewAsync(userId, userId, learning.Id, "approve");
 
@@ -136,7 +136,7 @@ public class AgentLearningServiceTests
     {
         await using var db = CreateDb();
         var userId = Guid.NewGuid();
-        var service = new AgentLearningService(db);
+        var service = TestServices.AgentLearningService(db);
         await service.UpsertCandidateAsync(userId, Request("format", "https://www.linkedin.com/jobs/view/1", "salary-integer", "Salario inteiro", "Usar 3800 em vez de 3800,00.", "low"));
         await service.UpsertCandidateAsync(userId, Request("workflow", "gupy.io", "workflow-stuck", "Fluxo preso", "Navegacao travou.", "medium"));
 

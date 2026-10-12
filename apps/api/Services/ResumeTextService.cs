@@ -10,6 +10,10 @@ namespace JobPilot.Api.Services;
 
 public class ResumeTextService
 {
+    private const long MaxInputBytes = 10 * 1024 * 1024;
+    private const int MaxPdfPages = 40;
+    private const long MaxDocxUncompressedBytes = 25 * 1024 * 1024;
+    private const long MaxDocxEntryBytes = 8 * 1024 * 1024;
     private readonly ConcurrentDictionary<string, CacheEntry> _cache = new(StringComparer.OrdinalIgnoreCase);
 
     public string ReadResumeText(string? resumePath) => ReadResume(resumePath).Text;
@@ -18,10 +22,12 @@ public class ResumeTextService
     {
         if (string.IsNullOrWhiteSpace(resumePath) || !File.Exists(resumePath))
         {
-            return new ResumeTextExtraction("", EmptyReport("missing", "Arquivo de curriculo nao encontrado."));
+            return new ResumeTextExtraction("", EmptyReport("missing", "Arquivo de currículo não encontrado."));
         }
 
         var info = new FileInfo(resumePath);
+        if (info.Length > MaxInputBytes)
+            return new ResumeTextExtraction("", EmptyReport("oversized", "Arquivo de currículo maior que 10 MB."));
         var cacheKey = info.FullName;
         if (_cache.TryGetValue(cacheKey, out var cached) && cached.LastWriteUtc == info.LastWriteTimeUtc)
             return cached.Extraction;
@@ -64,9 +70,25 @@ public class ResumeTextService
         foreach (var page in document.GetPages())
         {
             pages++;
+            if (pages > MaxPdfPages)
+                throw new InvalidDataException($"PDF excede o limite de {MaxPdfPages} paginas.");
             var pageText = page.Text ?? "";
             if (CountWords(pageText) >= 5) pagesWithText++;
             sb.AppendLine(pageText);
+
+            var links = page.GetHyperlinks()
+                .Select(link => link.Uri?.Trim())
+                .Where(link => !string.IsNullOrWhiteSpace(link))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (links.Length > 0)
+            {
+                sb.AppendLine("PDF hyperlinks:");
+                foreach (var link in links)
+                {
+                    sb.AppendLine(link);
+                }
+            }
         }
 
         return new RawExtraction(sb.ToString(), "native_pdf", pages, pagesWithText);
@@ -75,6 +97,14 @@ public class ResumeTextService
     private static RawExtraction ExtractDocx(string path)
     {
         using var archive = ZipFile.OpenRead(path);
+        var totalUncompressedBytes = 0L;
+        foreach (var archiveEntry in archive.Entries)
+        {
+            if (archiveEntry.Length > MaxDocxEntryBytes ||
+                totalUncompressedBytes > MaxDocxUncompressedBytes - archiveEntry.Length)
+                throw new InvalidDataException("DOCX excede o limite de descompactacao permitido.");
+            totalUncompressedBytes += archiveEntry.Length;
+        }
         var entry = archive.GetEntry("word/document.xml");
         if (entry is null) return new RawExtraction("", "native_docx", 1, 0);
 
@@ -112,13 +142,15 @@ public class ResumeTextService
         if (characterCount > 0 && alphaNumeric > characterCount * 0.55) score += 6;
         if (strangeRatio > 0.03m) score -= 15;
         score = Math.Clamp(score, 0, 100);
+        if (sourceKind == "pdf" && raw.Method == "native_pdf" && score > 92)
+            score = 92;
 
-        if (characterCount < 300) warnings.Add("Texto extraido muito curto; o arquivo pode ser escaneado, imagem ou ter camada de texto ruim.");
-        if (sourceKind == "pdf" && raw.Pages > 0 && raw.PagesWithNativeText == 0) warnings.Add("PDF sem texto nativo detectavel; OCR e necessario antes de preencher automaticamente.");
-        if (sourceKind == "pdf" && raw.Pages > 0 && raw.PagesWithNativeText < raw.Pages) warnings.Add("PDF misto: algumas paginas nao possuem texto nativo suficiente.");
-        if (!hasEmail) warnings.Add("E-mail nao encontrado no texto extraido.");
-        if (!hasPhone) warnings.Add("Telefone nao encontrado no texto extraido.");
-        if (!hasSection) warnings.Add("Secoes comuns de curriculo nao foram detectadas com confianca.");
+        if (characterCount < 300) warnings.Add("Texto extraído muito curto; o arquivo pode ser escaneado, imagem ou ter camada de texto ruim.");
+        if (sourceKind == "pdf" && raw.Pages > 0 && raw.PagesWithNativeText == 0) warnings.Add("PDF sem texto nativo detectável; OCR é necessário antes de preencher automaticamente.");
+        if (sourceKind == "pdf" && raw.Pages > 0 && raw.PagesWithNativeText < raw.Pages) warnings.Add("PDF misto: algumas páginas não possuem texto nativo suficiente.");
+        if (!hasEmail) warnings.Add("E-mail não encontrado no texto extraído.");
+        if (!hasPhone) warnings.Add("Telefone não encontrado no texto extraído.");
+        if (!hasSection) warnings.Add("Seções comuns de currículo não foram detectadas com confiança.");
         if (strangeRatio > 0.03m) warnings.Add("Muitos caracteres incomuns detectados; pode haver problema de encoding ou OCR.");
 
         var requiresOcr = sourceKind == "pdf" && (raw.PagesWithNativeText == 0 || characterCount < 300);

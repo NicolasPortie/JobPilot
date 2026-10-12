@@ -35,7 +35,7 @@ public class AnswerResolverTests
         });
         await db.SaveChangesAsync();
 
-        var resolver = new AnswerResolver(db);
+        var resolver = TestServices.AnswerResolver(db);
         var profile = new CandidateProfile
         {
             Id = Guid.NewGuid(),
@@ -71,7 +71,7 @@ public class AnswerResolverTests
         });
         await db.SaveChangesAsync();
 
-        var resolver = new AnswerResolver(db);
+        var resolver = TestServices.AnswerResolver(db);
         var profile = new CandidateProfile
         {
             Id = Guid.NewGuid(),
@@ -102,7 +102,7 @@ public class AnswerResolverTests
         });
         await db.SaveChangesAsync();
 
-        var resolver = new AnswerResolver(db);
+        var resolver = TestServices.AnswerResolver(db);
         var result = await resolver.ResolveAsync(userId, "Pergunta totalmente diferente e sem sentido", "", null);
 
         Assert.Equal("checkpoint", result.Source);
@@ -126,7 +126,7 @@ public class AnswerResolverTests
         });
         await db.SaveChangesAsync();
 
-        var resolver = new AnswerResolver(db);
+        var resolver = TestServices.AnswerResolver(db);
         var result = await resolver.ResolveAsync(userId, "Como esta seu ingles?", "", null);
 
         Assert.True(result.Confidence > 0.5m);
@@ -149,7 +149,7 @@ public class AnswerResolverTests
         });
         await db.SaveChangesAsync();
 
-        var resolver = new AnswerResolver(db);
+        var resolver = TestServices.AnswerResolver(db);
         var result = await resolver.ResolveAsync(userId, "Voce e PCD?", "", null);
 
         Assert.Equal("checkpoint", result.Source);

@@ -4,10 +4,10 @@ services:
     container_name: jobpilot-postgres
     environment:
       POSTGRES_USER: jobpilot
-      POSTGRES_PASSWORD: jobpilot
+      POSTGRES_PASSWORD: ${JOBPILOT_POSTGRES_PASSWORD:?Set JOBPILOT_POSTGRES_PASSWORD or run scripts/start-mvp.ps1}
       POSTGRES_DB: jobpilot
     ports:
-      - "5434:5432"
+      - "127.0.0.1:5434:5432"
     volumes:
       - jobpilot_pgdata:/var/lib/postgresql/data
     healthcheck:

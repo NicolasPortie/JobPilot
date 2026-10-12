@@ -10,14 +10,18 @@ public sealed class ResumeFileService(IConfiguration configuration, ProfileImpor
         ".pdf", ".docx", ".txt", ".md"
     };
 
-    public async Task<ProfileImportResponse> ImportUploadAsync(Guid userId, IFormFile file, bool fetchPublicLinks, bool useAi)
+    public async Task<ResumeFileImportResponse> ImportUploadAsync(Guid userId, IFormFile file, bool fetchPublicLinks, bool useAi)
     {
+        if (file is null)
+            throw new InvalidOperationException("Envie um arquivo de currículo.");
         if (file.Length <= 0) throw new InvalidOperationException("Arquivo vazio.");
-        if (file.Length > 10 * 1024 * 1024) throw new InvalidOperationException("Arquivo maior que 10MB.");
+        if (file.Length > 10 * 1024 * 1024) throw new InvalidOperationException("Arquivo maior que 10 MB.");
 
         var extension = Path.GetExtension(file.FileName);
         if (!AllowedExtensions.Contains(extension))
-            throw new InvalidOperationException("Formato nao suportado. Use PDF, DOCX, TXT ou MD.");
+            throw new InvalidOperationException("Formato não suportado. Use PDF, DOCX, TXT ou MD.");
+
+        await UploadFilePolicy.ValidateSignatureAsync(file, extension);
 
         var uploadRoot = configuration["Candidate:ResumeUploadDirectory"];
         if (string.IsNullOrWhiteSpace(uploadRoot))
@@ -27,15 +31,32 @@ public sealed class ResumeFileService(IConfiguration configuration, ProfileImpor
         Directory.CreateDirectory(userDir);
 
         var safeBaseName = MakeSafeFileName(Path.GetFileNameWithoutExtension(file.FileName));
-        var fileName = $"{DateTimeOffset.UtcNow:yyyyMMddHHmmss}-{safeBaseName}{extension.ToLowerInvariant()}";
+        var fileName = $"{DateTimeOffset.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}-{safeBaseName}{extension.ToLowerInvariant()}";
         var fullPath = Path.Combine(userDir, fileName);
 
-        await using (var stream = File.Create(fullPath))
+        try
         {
-            await file.CopyToAsync(stream);
-        }
+            await using (var stream = File.Create(fullPath))
+            {
+                await file.CopyToAsync(stream);
+            }
 
-        return await importer.ImportAsync(userId, new ProfileImportRequest(fullPath, fetchPublicLinks, useAi));
+            await UploadFilePolicy.ValidateStoredArchiveAsync(fullPath, extension);
+            if (extension.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+                UploadFilePolicy.ValidatePdfReadable(fullPath);
+            var result = await importer.ImportStoredFileAsync(userId, fullPath, fetchPublicLinks, useAi);
+            var response = ResumeFileImportResponse.From(result);
+            var avWarning = AntivirusPolicy.WarningFor(configuration);
+            return avWarning is null
+                ? response
+                : response with { Warnings = response.Warnings.Append(avWarning).ToArray() };
+        }
+        catch
+        {
+            if (File.Exists(fullPath))
+                File.Delete(fullPath);
+            throw;
+        }
     }
 
     private static string MakeSafeFileName(string value)

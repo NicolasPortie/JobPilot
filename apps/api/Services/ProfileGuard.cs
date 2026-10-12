@@ -1,40 +1,35 @@
 using System.Text.RegularExpressions;
-using JobPilot.Api.Data;
 using JobPilot.Api.Domain;
+using JobPilot.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace JobPilot.Api.Services;
 
-public class ProfileGuard(JobPilotDbContext db, ResumeTextService? resumeTextService = null)
+public class ProfileGuard(
+    IRepository<CandidateProfile> profiles,
+    IRepository<ProfileValidationRule> rules,
+    IUnitOfWork unitOfWork,
+    ResumeTextService? resumeTextService = null)
 {
     public async Task<List<ProfileValidationIssue>> ValidateAsync(Guid userId)
     {
-        var profile = await db.CandidateProfiles.FirstOrDefaultAsync(x => x.UserId == userId);
+        var profile = await profiles.FirstOrDefaultAsync(x => x.UserId == userId);
         if (profile is null)
         {
             return [new ProfileValidationIssue("Profile", "Perfil do candidato nao encontrado.", true)];
         }
 
-        var rules = await db.ProfileValidationRules
-            .Where(x => x.UserId == userId)
-            .ToListAsync();
-
-        if (rules.Count == 0)
-        {
-            rules = GetDefaultRules(userId);
-            db.ProfileValidationRules.AddRange(rules);
-            await db.SaveChangesAsync();
-        }
+        var userRules = await EnsureRulesAsync(userId);
 
         var enriched = EnrichFromResume(profile);
         if (enriched)
         {
             profile.UpdatedAt = DateTimeOffset.UtcNow;
-            await db.SaveChangesAsync();
+            await unitOfWork.SaveChangesAsync();
         }
 
         var issues = new List<ProfileValidationIssue>();
-        foreach (var rule in rules)
+        foreach (var rule in userRules)
         {
             var value = GetFieldValue(profile, rule.FieldName);
             if (!IsValid(value, rule))
@@ -45,6 +40,35 @@ public class ProfileGuard(JobPilotDbContext db, ResumeTextService? resumeTextSer
         }
 
         return issues;
+    }
+
+    /// <summary>
+    /// Completude do perfil (0-100) calculada sobre as regras de validacao do
+    /// usuario: quantas passam sobre o total. Mesma fonte de verdade do ValidateAsync.
+    /// Somente leitura — nao enriquece nem altera o perfil.
+    /// </summary>
+    public async Task<(int Passed, int Total)> CompletionAsync(Guid userId)
+    {
+        var profile = await profiles.FirstOrDefaultAsync(x => x.UserId == userId);
+        if (profile is null) return (0, 0);
+        var userRules = await EnsureRulesAsync(userId);
+        if (userRules.Count == 0) return (0, 0);
+        var passed = userRules.Count(rule => IsValid(GetFieldValue(profile, rule.FieldName), rule));
+        return (passed, userRules.Count);
+    }
+
+    private async Task<List<ProfileValidationRule>> EnsureRulesAsync(Guid userId)
+    {
+        var userRules = await rules.ListAsync(x => x.UserId == userId);
+        if (userRules.Count == 0)
+        {
+            userRules = GetDefaultRules(userId);
+            foreach (var rule in userRules)
+                rules.Add(rule);
+            await unitOfWork.SaveChangesAsync();
+        }
+
+        return userRules;
     }
 
     private bool EnrichFromResume(CandidateProfile profile)
@@ -82,16 +106,6 @@ public class ProfileGuard(JobPilotDbContext db, ResumeTextService? resumeTextSer
             }
         }
 
-        if (string.IsNullOrWhiteSpace(profile.Cpf))
-        {
-            var cpf = Regex.Match(resumeText, @"\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b");
-            if (cpf.Success)
-            {
-                profile.Cpf = Regex.Replace(cpf.Value, @"\D", "");
-                changed = true;
-            }
-        }
-
         if (string.IsNullOrWhiteSpace(profile.LinkedinUrl))
         {
             var linkedin = Regex.Match(resumeText, @"https?://(?:www\.)?linkedin\.com/[^\s]+|linkedin\.com/[^\s]+", RegexOptions.IgnoreCase);
@@ -112,12 +126,26 @@ public class ProfileGuard(JobPilotDbContext db, ResumeTextService? resumeTextSer
             }
         }
 
-        if (string.IsNullOrWhiteSpace(profile.City) || profile.City.Equals("Brazil", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(profile.City) || profile.City.Equals("Brazil", StringComparison.OrdinalIgnoreCase) || profile.City.Equals("Brasil", StringComparison.OrdinalIgnoreCase))
         {
-            var city = ExtractCity(resumeText);
-            if (!string.IsNullOrWhiteSpace(city))
+            var location = ExtractLocation(resumeText);
+            if (!string.IsNullOrWhiteSpace(location.City))
             {
-                profile.City = city;
+                profile.City = location.City;
+                changed = true;
+            }
+            if (!string.IsNullOrWhiteSpace(location.State) && string.IsNullOrWhiteSpace(profile.State))
+            {
+                profile.State = location.State;
+                changed = true;
+            }
+        }
+        else if (string.IsNullOrWhiteSpace(profile.State))
+        {
+            var location = ExtractLocation(resumeText);
+            if (!string.IsNullOrWhiteSpace(location.State))
+            {
+                profile.State = location.State;
                 changed = true;
             }
         }
@@ -162,11 +190,11 @@ public class ProfileGuard(JobPilotDbContext db, ResumeTextService? resumeTextSer
         return url.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? url : $"https://{url}";
     }
 
-    private static string ExtractCity(string resumeText)
+    private static (string City, string State) ExtractLocation(string resumeText)
     {
         var cityState = Regex.Match(resumeText, @"\b([A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+(?:\s+[A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+){0,3})\s*[-,\/]\s*(SP|RJ|MG|PR|SC|RS|BA|GO|PE|CE|ES|DF|MT|MS|PA|PB|RN|AL|SE|PI|MA|RO|RR|TO|AC|AM|AP)\b");
-        if (cityState.Success) return cityState.Groups[1].Value.Trim();
-        return "";
+        if (cityState.Success) return (cityState.Groups[1].Value.Trim(), cityState.Groups[2].Value.ToUpperInvariant());
+        return ("", "");
     }
 
     private static string[] ExtractSkills(string resumeText)
@@ -210,6 +238,7 @@ public class ProfileGuard(JobPilotDbContext db, ResumeTextService? resumeTextSer
             "email" => profile.Email,
             "phone" => profile.Phone,
             "city" => profile.City,
+            "state" => profile.State,
             "country" => profile.Country,
             "linkedinurl" => profile.LinkedinUrl,
             "githuburl" => profile.GithubUrl,
@@ -270,13 +299,11 @@ public class ProfileGuard(JobPilotDbContext db, ResumeTextService? resumeTextSer
         [
             new ProfileValidationRule { Id = Guid.NewGuid(), UserId = userId, FieldName = "Phone", ValidationType = "regex", ValidationValue = @"^(\(?\d{2}\)?\s?\d{4,5}-?\d{4})$", ErrorMessage = "Telefone invalido. Use formato (11) 99999-9999.", IsCritical = true },
             new ProfileValidationRule { Id = Guid.NewGuid(), UserId = userId, FieldName = "Email", ValidationType = "regex", ValidationValue = @"^[^@\s]+@[^@\s]+\.[^@\s]+$", ErrorMessage = "Email invalido.", IsCritical = true },
-            new ProfileValidationRule { Id = Guid.NewGuid(), UserId = userId, FieldName = "ResumePath", ValidationType = "file_exists", ValidationValue = "", ErrorMessage = "Arquivo de curriculo nao encontrado no caminho informado.", IsCritical = true },
-            new ProfileValidationRule { Id = Guid.NewGuid(), UserId = userId, FieldName = "SalaryExpectation", ValidationType = "not_empty", ValidationValue = "", ErrorMessage = "Pretensao salarial nao informada. O agente pode preencher errado.", IsCritical = true },
+            new ProfileValidationRule { Id = Guid.NewGuid(), UserId = userId, FieldName = "SalaryExpectation", ValidationType = "not_empty", ValidationValue = "", ErrorMessage = "Pretensao salarial ainda nao informada.", IsCritical = false },
             new ProfileValidationRule { Id = Guid.NewGuid(), UserId = userId, FieldName = "Skills", ValidationType = "length", ValidationValue = "3", ErrorMessage = "Adicione pelo menos 3 skills ao seu perfil.", IsCritical = false },
             new ProfileValidationRule { Id = Guid.NewGuid(), UserId = userId, FieldName = "FullName", ValidationType = "regex", ValidationValue = @"^\S+\s+\S+$", ErrorMessage = "Informe nome completo (nome e sobrenome).", IsCritical = true },
-            new ProfileValidationRule { Id = Guid.NewGuid(), UserId = userId, FieldName = "Cpf", ValidationType = "regex", ValidationValue = @"^\d{11}$|^\d{3}\.\d{3}\.\d{3}-\d{2}$", ErrorMessage = "CPF invalido. Use 11 digitos ou formato 000.000.000-00.", IsCritical = false },
             new ProfileValidationRule { Id = Guid.NewGuid(), UserId = userId, FieldName = "City", ValidationType = "not_empty", ValidationValue = "", ErrorMessage = "Cidade nao informada.", IsCritical = false },
-            new ProfileValidationRule { Id = Guid.NewGuid(), UserId = userId, FieldName = "ProfessionalSummary", ValidationType = "not_empty", ValidationValue = "", ErrorMessage = "Resumo profissional vazio. Ajuda o agente a montar respostas personalizadas.", IsCritical = false }
+            new ProfileValidationRule { Id = Guid.NewGuid(), UserId = userId, FieldName = "ProfessionalSummary", ValidationType = "not_empty", ValidationValue = "", ErrorMessage = "Resumo profissional vazio. Ajuda a explicar seu valor para a vaga.", IsCritical = false }
         ];
     }
 }

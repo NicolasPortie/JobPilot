@@ -19,7 +19,7 @@ public class AutoApplyPolicyServiceTests
     public async Task EvaluateAsync_Allows_WhenScoreAboveThreshold()
     {
         var db = CreateDb();
-        var service = new AutoApplyPolicyService(db);
+        var service = TestServices.AutoApplyPolicyService(db);
         var userId = Guid.NewGuid();
         var lead = new JobLead { Id = Guid.NewGuid(), UserId = userId, Title = "Dev .NET", Score = 60 };
         var filter = new JobFilter { MinScore = 30, AutoIgnoreLowScore = false };
@@ -33,7 +33,7 @@ public class AutoApplyPolicyServiceTests
     public async Task EvaluateAsync_Blocks_WhenScoreBelowThreshold()
     {
         var db = CreateDb();
-        var service = new AutoApplyPolicyService(db);
+        var service = TestServices.AutoApplyPolicyService(db);
         var userId = Guid.NewGuid();
         var lead = new JobLead { Id = Guid.NewGuid(), UserId = userId, Title = "Dev .NET", Score = 20 };
         var filter = new JobFilter { MinScore = 30, AutoIgnoreLowScore = false };
@@ -48,7 +48,7 @@ public class AutoApplyPolicyServiceTests
     public async Task EvaluateAsync_Blocks_WhenUnknownMustHaveExists()
     {
         var db = CreateDb();
-        var service = new AutoApplyPolicyService(db);
+        var service = TestServices.AutoApplyPolicyService(db);
         var userId = Guid.NewGuid();
         var lead = new JobLead { Id = Guid.NewGuid(), UserId = userId, Title = "Dev .NET", Score = 60 };
         var filter = new JobFilter { MinScore = 30, AutoIgnoreLowScore = false };
@@ -78,7 +78,7 @@ public class AutoApplyPolicyServiceTests
     public async Task EvaluateAsync_Allows_WhenNoUnknownMustHave()
     {
         var db = CreateDb();
-        var service = new AutoApplyPolicyService(db);
+        var service = TestServices.AutoApplyPolicyService(db);
         var userId = Guid.NewGuid();
         var lead = new JobLead { Id = Guid.NewGuid(), UserId = userId, Title = "Dev .NET", Score = 60 };
         var filter = new JobFilter { MinScore = 30, AutoIgnoreLowScore = false };

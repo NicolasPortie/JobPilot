@@ -1,3 +1,4 @@
+using JobPilot.Api.Application;
 using JobPilot.Api.Data;
 using JobPilot.Api.Domain;
 using JobPilot.Api.Services;
@@ -18,7 +19,7 @@ public class AgentTracePersistenceTests
             Trace(userId, applicationJobId, runId, 2, "second"),
             Trace(userId, applicationJobId, runId, 1, "first"));
         await db.SaveChangesAsync();
-        var audit = new ApplicationAuditService(db);
+        var audit = TestServices.ApplicationAuditService(db);
 
         var steps = await audit.GetTraceStepsAsync(userId, applicationJobId);
 
@@ -94,16 +95,16 @@ public class AgentTracePersistenceTests
         };
         db.Checkpoints.Add(checkpoint);
         await db.SaveChangesAsync();
-        var service = new CheckpointResolutionService(db, new ReusableAnswerService(db));
+        var service = TestServices.CheckpointResolutionService(db);
 
         var resolved = await service.ResolveAsync(userId, checkpoint.Id, new ResolveCheckpointRequest("resolved", "R$ 5000"));
 
-        Assert.NotNull(resolved);
-        Assert.Equal("resolved", resolved!.ResolutionStatus);
-        Assert.Equal(runId, resolved.AgentRunId);
-        Assert.Equal(traceId, resolved.TraceStepId);
-        Assert.Equal("reobserve", resolved.ResumeMode);
-        Assert.NotNull(resolved.ResolvedAt);
+        Assert.Equal(ServiceResultStatus.Ok, resolved.Status);
+        Assert.Equal("resolved", resolved.Value!.ResolutionStatus);
+        Assert.Equal(runId, resolved.Value.AgentRunId);
+        Assert.Equal(traceId, resolved.Value.TraceStepId);
+        Assert.Equal("reobserve", resolved.Value.ResumeMode);
+        Assert.NotNull(resolved.Value.ResolvedAt);
         Assert.Contains(await db.ReusableAnswers.ToListAsync(), answer =>
             answer.UserId == userId &&
             answer.QuestionText == "Pretensao salarial" &&

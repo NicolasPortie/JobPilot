@@ -179,10 +179,12 @@ public static class ServiceCollectionExtensions
                 client.Timeout = TimeSpan.FromSeconds(60);
             })
             .ConfigurePrimaryHttpMessageHandler(() => OutboundUrlPolicy.CreateHandler());
+        services.AddSingleton<AiHealthTracker>();
         services.AddHttpClient<AiCompletionService>(client =>
             {
                 client.MaxResponseContentBufferSize = 4 * 1024 * 1024;
-                client.Timeout = TimeSpan.FromSeconds(60);
+                // Gerar um currículo completo leva mais que uma resposta curta.
+                client.Timeout = TimeSpan.FromSeconds(150);
             })
             .ConfigurePrimaryHttpMessageHandler(() => OutboundUrlPolicy.CreateHandler(allowLocalOllama: true));
         services.AddScoped<IAiChatService, AiChatService>();

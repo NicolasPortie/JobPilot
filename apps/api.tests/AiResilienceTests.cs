@@ -56,6 +56,70 @@ public sealed class AiResilienceTests
         Assert.True(handler.LastBody.Length < longPrompt.Length);
     }
 
+    [Fact]
+    public async Task ResolveProvider_SkipsSavedKeyEncryptedWithOldSecret_AndUsesConfiguredKey()
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        var oldSecret = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Security:SecretKey"] = "old-secret-old-secret-old-secret-0001"
+        }).Build();
+        db.AiProviders.Add(new AiProvider
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Name = "Saved Kimi",
+            ProviderType = "kimi",
+            BaseUrl = "https://api.kimi.com/coding",
+            Model = "kimi-for-coding",
+            ApiFormat = "anthropic-messages",
+            EncryptedApiKey = SecretProtector.Protect("sk-old", oldSecret),
+            IsActive = true,
+            IsDefault = true
+        });
+        await db.SaveChangesAsync();
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Security:SecretKey"] = "new-secret-new-secret-new-secret-0002",
+            ["Ai:Provider"] = "anthropic",
+            ["Ai:ApiKey"] = "sk-configured"
+        }).Build();
+        var service = new AiCompletionService(new HttpClient(), configuration, db, NullLogger<AiCompletionService>.Instance, new TraceRedactionService());
+
+        var provider = await service.ResolveProviderAsync(userId);
+
+        Assert.Equal("anthropic", provider.ProviderType);
+        Assert.Equal("https://api.anthropic.com", provider.BaseUrl);
+        Assert.Equal("sk-configured", SecretProtector.Unprotect(provider.EncryptedApiKey, configuration));
+    }
+
+    [Fact]
+    public async Task ProviderRejection_IsReportedInStatus()
+    {
+        await using var db = CreateDb();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Security:SecretKey"] = "new-secret-new-secret-new-secret-0002",
+            ["Ai:Provider"] = "anthropic",
+            ["Ai:ApiKey"] = "sk-configured"
+        }).Build();
+        var health = new AiHealthTracker();
+        var handler = new StaticHandler(HttpStatusCode.Forbidden, "{\"error\":{\"message\":\"plan has no access\"}}");
+        var service = new AiCompletionService(new HttpClient(handler), configuration, db, NullLogger<AiCompletionService>.Instance, new TraceRedactionService(), health);
+        var userId = Guid.NewGuid();
+
+        var text = await service.CompleteTextAsync(userId, "test", "system", "prompt");
+        var status = await service.GetStatusAsync(userId);
+
+        Assert.Null(text);
+        Assert.False(status.Available);
+        Assert.True(status.Configured);
+        Assert.Contains("plan has no access", status.Message);
+        Assert.Equal(1, handler.Calls);
+    }
+
     private static JobPilotDbContext CreateDb()
     {
         var options = new DbContextOptionsBuilder<JobPilotDbContext>()
@@ -78,6 +142,20 @@ public sealed class AiResilienceTests
             {
                 Content = new StringContent("{\"message\":{\"role\":\"assistant\",\"content\":\"ok\"}}", Encoding.UTF8, "application/json"),
             };
+        }
+    }
+
+    private sealed class StaticHandler(HttpStatusCode status, string body) : HttpMessageHandler
+    {
+        public int Calls;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Calls++;
+            return Task.FromResult(new HttpResponseMessage(status)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json"),
+            });
         }
     }
 }

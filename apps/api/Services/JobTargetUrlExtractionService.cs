@@ -86,13 +86,22 @@ public sealed class JobTargetUrlExtractionService(HttpClient http)
     private async Task<string> FetchAsync(string url)
     {
         OutboundUrlPolicy.EnsurePublicHttpUrl(url);
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36");
-        request.Headers.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-        request.Headers.TryAddWithoutValidation("Accept-Language", "pt-BR,pt;q=0.9,en;q=0.8");
-        var response = await http.SendAsync(request);
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadAsStringAsync();
+        // Sites como o LinkedIn respondem 429 sob rajada: espera curta e tenta de novo.
+        for (var attempt = 0; ; attempt++)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36");
+            request.Headers.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+            request.Headers.TryAddWithoutValidation("Accept-Language", "pt-BR,pt;q=0.9,en;q=0.8");
+            using var response = await http.SendAsync(request);
+            if ((int)response.StatusCode is 429 or 503 && attempt < 2)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1.5 * (attempt + 1)));
+                continue;
+            }
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsStringAsync();
+        }
     }
 
     private static bool TryExtractLinkedInJobId(string url, out string jobId)

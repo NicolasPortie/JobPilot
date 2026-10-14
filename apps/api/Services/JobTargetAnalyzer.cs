@@ -11,25 +11,28 @@ internal static class JobTargetAnalyzer
     public static JobRequirementExtractionResponse BuildDeterministicExtraction(ResolvedJobSource source)
     {
         var text = source.Text;
-        var normalized = RemoveDiacritics(text).ToLowerInvariant();
+        var sections = new JobPostingSections(text);
+        var normalized = sections.NormalizedText;
         var requirements = new List<JobRequirementItem>();
-        var order = 0;
 
-        foreach (var tech in KnownTech.Where(tech => ContainsTerm(normalized, tech)))
+        foreach (var (tech, importance) in FindTechnologies(sections))
         {
             requirements.Add(new JobRequirementItem(
                 "technology",
                 tech,
-                LooksMustHave(normalized, tech) ? "must_have" : "nice_to_have",
+                importance,
                 EvidenceAround(text, tech),
                 NormalizeKeyword(tech),
                 [tech]));
-            order++;
         }
 
-        if (ContainsAny(normalized, ["api", "apis", "rest", "backend"]))
+        foreach (var language in FindLanguages(sections, text))
+            requirements.Add(language);
+
+        var lowered = normalized.ToLowerInvariant();
+        if (ContainsAny(lowered, ["api", "apis", "rest", "backend"]))
             requirements.Add(new JobRequirementItem("responsibility", "Desenvolvimento de APIs e integrações", "context", EvidenceAround(text, "API"), "apis-rest", ["APIs", "REST"]));
-        if (ContainsAny(normalized, ["testes", "testing", "qa", "qualidade"]))
+        if (ContainsAny(lowered, ["testes", "testing", "qa", "qualidade"]))
             requirements.Add(new JobRequirementItem("responsibility", "Testes e qualidade de software", "context", EvidenceAround(text, "testes"), "testes", ["testes", "QA"]));
 
         var warnings = new List<string>();
@@ -37,14 +40,81 @@ internal static class JobTargetAnalyzer
 
         return new JobRequirementExtractionResponse(
             source.Title,
-            source.Company,
-            source.Location,
-            DetectSeniority(normalized),
-            DetectWorkplace(normalized),
+            FirstNonEmpty(source.Company, LabeledValue(text, "empresa", "company", "companhia")),
+            FirstNonEmpty(source.Location, LabeledValue(text, "local", "localizacao", "location", "cidade")),
+            DetectSeniority(lowered),
+            DetectWorkplace(lowered),
             BuildSummary(text),
-            requirements.DistinctBy(x => x.NormalizedKeyword).Take(30).ToArray(),
+            requirements.DistinctBy(x => x.NormalizedKeyword).Take(40).ToArray(),
             warnings.ToArray(),
             requirements.Count > 0 ? 0.55m : 0.25m);
+    }
+
+    /// <summary>
+    /// Tecnologias citadas na vaga, com a importância vinda da seção em que aparecem.
+    /// Termos só presentes em Benefícios são descartados; um termo contido em outro mais
+    /// específico na mesma posição (".NET" em ".NET 8") não vira requisito separado.
+    /// </summary>
+    private static IEnumerable<(string Tech, string Importance)> FindTechnologies(JobPostingSections sections)
+    {
+        var matches = new List<(string Tech, int Start, int End, JobSection Section)>();
+        foreach (var tech in KnownTech)
+        {
+            var options = tech.Length <= 3 && tech.All(char.IsLetter) ? RegexOptions.CultureInvariant : RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
+            // "8+" em ".NET 8+" é sufixo de versão; já em "C++" o "+" faz parte do nome.
+            var trailing = char.IsDigit(tech[^1]) ? @"(?![\p{L}\p{N}#])" : @"(?![\p{L}\p{N}#+])";
+            var pattern = $@"(?<![\p{{L}}\p{{N}}#+.]){Regex.Escape(RemoveDiacritics(tech))}{trailing}(?!\.[\p{{L}}\p{{N}}])";
+            foreach (Match match in Regex.Matches(sections.NormalizedText, pattern, options))
+                matches.Add((tech, match.Index, match.Index + match.Length, sections.SectionAt(match.Index)));
+        }
+
+        var hasSections = sections.HasHeadings;
+        foreach (var group in matches.GroupBy(m => m.Tech, StringComparer.OrdinalIgnoreCase))
+        {
+            var own = group.ToList();
+            var standalone = own.Where(m => !matches.Any(o => o.Tech != m.Tech && o.Start <= m.Start && o.End >= m.End && (o.End - o.Start) > (m.End - m.Start))).ToList();
+            if (standalone.Count == 0) continue;
+
+            var found = standalone.Select(m => m.Section).ToList();
+            string? importance;
+            if (!hasSections)
+                importance = LooksMustHave(sections.NormalizedText.ToLowerInvariant(), group.Key) ? "must_have" : "nice_to_have";
+            else if (found.Contains(JobSection.Requirements)) importance = "must_have";
+            else if (found.Contains(JobSection.Responsibilities)) importance = "must_have";
+            else if (found.Contains(JobSection.NiceToHave)) importance = "nice_to_have";
+            else if (found.Any(s => s is JobSection.Unknown or JobSection.About)) importance = "context";
+            else importance = null; // só em Benefícios
+            if (importance is not null) yield return (group.Key, importance);
+        }
+    }
+
+    private static IEnumerable<JobRequirementItem> FindLanguages(JobPostingSections sections, string text)
+    {
+        var languages = new[] { ("Inglês", "ingles|english"), ("Espanhol", "espanhol|spanish") };
+        foreach (var (label, pattern) in languages)
+        {
+            var match = Regex.Match(sections.NormalizedText, $@"\b({pattern})\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (!match.Success) continue;
+            var section = sections.SectionAt(match.Index);
+            if (section == JobSection.Benefits) continue;
+            var importance = section == JobSection.NiceToHave ? "nice_to_have" : section == JobSection.Requirements ? "must_have" : "context";
+            yield return new JobRequirementItem("language", label, importance, EvidenceAround(text, match.Value), NormalizeKeyword(label), [match.Value]);
+        }
+    }
+
+    /// <summary>Valor de uma linha rotulada ("Empresa: Acme").</summary>
+    private static string LabeledValue(string text, params string[] labels)
+    {
+        foreach (var line in (text ?? "").Split('\n'))
+        {
+            var colon = line.IndexOf(':');
+            if (colon <= 0 || colon > 20) continue;
+            var key = RemoveDiacritics(line[..colon]).Trim().ToLowerInvariant();
+            if (!labels.Contains(key)) continue;
+            var value = line[(colon + 1)..].Split('|')[0].Trim();
+            if (value.Length is >= 2 and <= 80) return value;
+        }
+        return "";
     }
 
     public static JobRequirementExtractionResponse EnrichWithDeterministicRequirements(JobRequirementExtractionResponse extraction, ResolvedJobSource source)

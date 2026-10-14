@@ -33,6 +33,10 @@ public sealed class JobTargetService(JobPilotDbContext db, IAiChatService ai, Re
         extraction ??= JobTargetAnalyzer.BuildDeterministicExtraction(source);
         extraction = JobTargetAnalyzer.EnrichWithDeterministicRequirements(extraction, source);
         extraction = JobTargetAnalyzer.NormalizeExtraction(extraction, source);
+        if (extraction.Requirements.Length == 0)
+            throw new InvalidOperationException(source.Kind == "url"
+                ? "Não consegui ler esta vaga pelo link (o site bloqueou ou a página não tem a descrição). Cole o texto da vaga."
+                : "Não encontrei requisitos neste texto. Cole a descrição completa da vaga.");
 
         var now = DateTimeOffset.UtcNow;
         var target = new JobTarget

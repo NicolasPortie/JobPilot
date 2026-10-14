@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using JobPilot.Api.Domain;
 using UglyToad.PdfPig;
+using UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor;
 
 namespace JobPilot.Api.Services;
 
@@ -12,6 +13,7 @@ public class ResumeTextService
 {
     private const long MaxInputBytes = 10 * 1024 * 1024;
     private const int MaxPdfPages = 40;
+    private const int MaxTextChars = 30000;
     private const long MaxDocxUncompressedBytes = 25 * 1024 * 1024;
     private const long MaxDocxEntryBytes = 8 * 1024 * 1024;
     private readonly ConcurrentDictionary<string, CacheEntry> _cache = new(StringComparer.OrdinalIgnoreCase);
@@ -51,7 +53,7 @@ public class ResumeTextService
             };
 
             var text = NormalizeWhitespace(raw.Text);
-            text = text.Length > 12000 ? text[..12000] : text;
+            text = text.Length > MaxTextChars ? text[..MaxTextChars] : text;
             return new ResumeTextExtraction(text, BuildReport(sourceKind, raw, text));
         }
         catch
@@ -63,6 +65,7 @@ public class ResumeTextService
     private static RawExtraction ExtractPdfText(string path)
     {
         var sb = new StringBuilder();
+        var links = new List<string>();
         var pages = 0;
         var pagesWithText = 0;
 
@@ -72,23 +75,21 @@ public class ResumeTextService
             pages++;
             if (pages > MaxPdfPages)
                 throw new InvalidDataException($"PDF excede o limite de {MaxPdfPages} paginas.");
-            var pageText = page.Text ?? "";
+            // Ordem de conteúdo preserva linhas e bullets; page.Text devolve tudo numa linha só.
+            var pageText = ContentOrderTextExtractor.GetText(page);
             if (CountWords(pageText) >= 5) pagesWithText++;
             sb.AppendLine(pageText);
 
-            var links = page.GetHyperlinks()
+            links.AddRange(page.GetHyperlinks()
                 .Select(link => link.Uri?.Trim())
-                .Where(link => !string.IsNullOrWhiteSpace(link))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-            if (links.Length > 0)
-            {
-                sb.AppendLine("PDF hyperlinks:");
-                foreach (var link in links)
-                {
-                    sb.AppendLine(link);
-                }
-            }
+                .Where(link => !string.IsNullOrWhiteSpace(link))!);
+        }
+
+        var distinctLinks = links.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (distinctLinks.Length > 0)
+        {
+            sb.AppendLine("PDF hyperlinks:");
+            foreach (var link in distinctLinks) sb.AppendLine(link);
         }
 
         return new RawExtraction(sb.ToString(), "native_pdf", pages, pagesWithText);
@@ -181,7 +182,14 @@ public class ResumeTextService
     private static ResumeExtractionReport EmptyReport(string sourceKind, string warning) =>
         new(sourceKind, "none", "unreadable", 0, 0m, true, true, 0, 0, 0, 0, [warning]);
 
-    private static string NormalizeWhitespace(string value) => Regex.Replace(value, @"\s+", " ").Trim();
+    // Mantém as quebras de linha: é por elas que as seções e os bullets são reconhecidos.
+    private static string NormalizeWhitespace(string value)
+    {
+        var lines = (value ?? "").Replace("\r\n", "\n").Replace('\r', '\n')
+            .Split('\n')
+            .Select(line => Regex.Replace(line, @"[ \t\u00A0]+", " ").Trim());
+        return Regex.Replace(string.Join("\n", lines), @"\n{3,}", "\n\n").Trim();
+    }
 
     private static int CountWords(string value) => Regex.Matches(value ?? "", @"\b[\p{L}\p{N}+#.]+\b").Count;
 

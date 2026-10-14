@@ -39,6 +39,15 @@ public sealed class ProfileImportService
     public Task<ProfileImportResponse> ImportAsync(Guid userId, ProfileImportRequest request) =>
         ImportCoreAsync(userId, request, null);
 
+    /// <summary>Reprocessa o último arquivo enviado com o parser atual, sem novo upload.</summary>
+    public async Task<ProfileImportResponse> ReimportStoredAsync(Guid userId, bool useAi)
+    {
+        var path = (await _db.CandidateProfiles.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == userId))?.ResumePath;
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            throw new InvalidOperationException("Nenhum currículo enviado foi encontrado. Envie o arquivo novamente.");
+        return await ImportCoreAsync(userId, new ProfileImportRequest(false, useAi), path);
+    }
+
     public Task<ProfileImportResponse> ImportStoredFileAsync(Guid userId, string storedResumePath, bool fetchPublicLinks, bool useAi) =>
         ImportCoreAsync(userId, new ProfileImportRequest(fetchPublicLinks, useAi), storedResumePath);
 
@@ -246,7 +255,9 @@ public sealed class ProfileImportService
         profile.TargetRole = ResumeProfileInference.Prefer(profile.TargetRole, data.TargetRole);
         profile.Seniority = ResumeProfileInference.Prefer(profile.Seniority, data.Seniority, "unknown").ToLowerInvariant();
         if (!string.IsNullOrWhiteSpace(data.ProfessionalSummary) &&
-            (string.IsNullOrWhiteSpace(profile.ProfessionalSummary) || data.ProfessionalSummary.Length > profile.ProfessionalSummary.Length / 2))
+            (string.IsNullOrWhiteSpace(profile.ProfessionalSummary) ||
+             ResumeProfileInference.IsPollutedSummary(profile.ProfessionalSummary) ||
+             data.ProfessionalSummary.Length > profile.ProfessionalSummary.Length / 2))
             profile.ProfessionalSummary = data.ProfessionalSummary.Trim();
         profile.Skills = ResumeProfileInference.MergeSkills(profile.Skills, data.Skills);
         if (!string.IsNullOrWhiteSpace(resumePath)) profile.ResumePath = resumePath;

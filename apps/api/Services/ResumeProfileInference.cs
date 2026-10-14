@@ -9,12 +9,12 @@ internal static class ResumeProfileInference
 {
     public static ResumeProfileImportData BuildDeterministicImport(string resumeText, string publicText, CandidateProfile profile)
     {
+        var parsed = ResumeStructureParser.Parse(resumeText);
         var corpus = $"{resumeText}\n{publicText}";
         var normalized = RemoveDiacritics(corpus).ToLowerInvariant();
-        var skills = KnownSkills()
-            .Where(skill => normalized.Contains(RemoveDiacritics(skill).ToLowerInvariant()))
+        var skills = parsed.Skills
+            .Concat(KnownSkills().Where(skill => normalized.Contains(RemoveDiacritics(skill).ToLowerInvariant())))
             .Concat(profile.Skills)
-            .Concat(InferRelatedSkills(normalized))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
@@ -26,13 +26,17 @@ internal static class ResumeProfileInference
         var portfolio = links.FirstOrDefault(x => !x.Contains("linkedin.com", StringComparison.OrdinalIgnoreCase) && !x.Contains("github.com", StringComparison.OrdinalIgnoreCase)) ?? "";
 
         var answers = BuildTechnicalAnswers(skills, normalized);
-        var summary = string.IsNullOrWhiteSpace(profile.ProfessionalSummary)
-            ? BuildSummary(corpus, skills)
-            : profile.ProfessionalSummary;
+        // O resumo vem do próprio currículo; o do perfil só vale se estiver limpo (já houve
+        // importações que gravaram nome, telefone e e-mail dentro do resumo).
+        var summary = !string.IsNullOrWhiteSpace(parsed.Summary)
+            ? parsed.Summary
+            : IsPollutedSummary(profile.ProfessionalSummary) || string.IsNullOrWhiteSpace(profile.ProfessionalSummary)
+                ? BuildSummary(resumeText)
+                : profile.ProfessionalSummary;
 
         var location = GuessLocation(corpus, profile.City, profile.State);
         return new ResumeProfileImportData(
-            profile.FullName,
+            string.IsNullOrWhiteSpace(profile.FullName) ? parsed.FullName : profile.FullName,
             email,
             phone,
             location.City,
@@ -90,17 +94,6 @@ internal static class ResumeProfileInference
         "Git", "GitHub", "Docker", "Playwright", "Selenium", "PHP"
     ];
 
-    private static IEnumerable<string> InferRelatedSkills(string normalized)
-    {
-        if (normalized.Contains("react")) { yield return "JavaScript"; yield return "HTML5"; yield return "CSS3"; }
-        if (normalized.Contains("spring boot")) yield return "Java";
-        if (normalized.Contains("asp.net")) { yield return ".NET"; yield return "C#"; yield return "API REST"; }
-        if (normalized.Contains("api")) yield return "API REST";
-        if (normalized.Contains("typescript")) yield return "JavaScript";
-        if (normalized.Contains("javascript")) { yield return "HTML5"; yield return "CSS3"; }
-        if (normalized.Contains("java") && normalized.Contains("spring")) yield return "Spring Boot";
-    }
-
     private static string ExtractTargetRole(string text)
     {
         var normalized = text.Replace("\r", "\n");
@@ -151,13 +144,14 @@ internal static class ResumeProfileInference
     private static void AddYesNo(List<ResumeScreeningAnswer> answers, string key, string question, bool value) =>
         answers.Add(new ResumeScreeningAnswer(key, question, value ? "Sim" : "Não", "resume_import"));
 
-    private static string BuildSummary(string corpus, string[] skills)
-    {
-        var first = Regex.Split(corpus, @"(?<=[.!?])\s+").FirstOrDefault(s => s.Length > 80 && s.Length < 600) ?? "";
-        return string.IsNullOrWhiteSpace(first)
-            ? $"Desenvolvedor de Software com experiência em {string.Join(", ", skills.Take(10))}."
-            : first.Trim();
-    }
+    // Sem seção de resumo, aproveita a primeira frase longa do texto; nunca inventa uma profissão.
+    private static string BuildSummary(string resumeText) =>
+        Regex.Split(resumeText ?? "", @"(?<=[.!?])\s+").FirstOrDefault(s => s.Length > 80 && s.Length < 600)?.Trim() ?? "";
+
+    public static bool IsPollutedSummary(string? summary) =>
+        !string.IsNullOrWhiteSpace(summary) &&
+        (summary.Contains('@') || Regex.IsMatch(summary, @"\d{4,5}[-\s]?\d{4}") ||
+         Regex.IsMatch(summary, @"(?i)\b(PERFIL PROFISSIONAL|RESUMO PROFISSIONAL|LinkedIn \| GitHub)\b"));
 
     private static (string City, string State) GuessLocation(string text, string currentCity, string currentState)
     {

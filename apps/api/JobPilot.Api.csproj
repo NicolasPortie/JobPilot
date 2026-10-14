@@ -12,6 +12,7 @@
   <ItemGroup>
     <Using Include="JobPilot.Api.Application.Contracts" />
     <Using Include="JobPilot.Api.Infrastructure" />
+    <InternalsVisibleTo Include="JobPilot.Api.Tests" />
   </ItemGroup>
 
   <ItemGroup>

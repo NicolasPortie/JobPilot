@@ -59,7 +59,7 @@ public class ProfileImportServiceTests
             Assert.Contains("JavaScript", result.Profile.Skills);
             Assert.Contains("Java", result.Profile.Skills);
             Assert.Contains("Spring Boot", result.Profile.Skills);
-            Assert.Contains("API REST", result.Profile.Skills);
+            Assert.Contains("APIs REST", result.Profile.Skills);
             Assert.Contains("HTML5", result.Profile.Skills);
             Assert.Contains("CSS3", result.Profile.Skills);
             Assert.Single(await db.ResumeImports.Where(x => x.UserId == userId).ToListAsync());

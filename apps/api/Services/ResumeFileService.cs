@@ -59,6 +59,9 @@ public sealed class ResumeFileService(IConfiguration configuration, ProfileImpor
         }
     }
 
+    public async Task<ResumeFileImportResponse> ReimportAsync(Guid userId, bool useAi) =>
+        ResumeFileImportResponse.From(await importer.ReimportStoredAsync(userId, useAi));
+
     private static string MakeSafeFileName(string value)
     {
         var chars = value

@@ -45,6 +45,12 @@ public sealed class ProfileController(
         return removed ? NoContent() : NotFound();
     }
 
+    /// <summary>Reprocessa o currículo já enviado com o leitor atual, criando uma nova versão base.</summary>
+    [HttpPost("reimport-resume")]
+    [EnableRateLimiting(RateLimitPolicies.Analysis)]
+    public async Task<ActionResult<ResumeFileImportResponse>> ReimportResume([FromQuery] bool? useAi) =>
+        Ok(await files.ReimportAsync(User.UserId(), useAi ?? true));
+
     [HttpPost("import-resume-file")]
     [Consumes("multipart/form-data")]
     [EnableRateLimiting(RateLimitPolicies.Analysis)]

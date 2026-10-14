@@ -1,0 +1,44 @@
+/* Fluxo rápido: ações do resultado, lote de vagas e histórico de candidaturas. */
+
+.cv-textarea { min-height: clamp(160px, 28vh, 320px); }
+.cv-textarea--short { min-height: 84px; }
+
+.cv-resultbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  border-color: #e4c9a4;
+  background: #fffaf1;
+}
+
+.cv-resultbar__info { flex: 1 1 220px; min-width: 0; }
+.cv-resultbar__title { margin: 0; font-size: 15px; font-weight: 800; color: #241b12; overflow-wrap: anywhere; }
+.cv-resultbar__meta { margin: 2px 0 0; font-size: 12px; color: #857263; }
+.cv-resultbar__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.cv-btn--small { min-height: 38px; font-size: 12.5px; padding: 0 14px; }
+
+.cv-batch { display: grid; gap: 10px; margin-top: 14px; }
+
+.cv-batch__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  border: 1px solid #efe0c8;
+  border-radius: 12px;
+  background: #fffdf8;
+  padding: 12px 14px;
+}
+
+.cv-batch__item--error { border-color: #e9b8a6; background: #fdf3ee; }
+.cv-batch__body { flex: 1 1 240px; min-width: 0; }
+.cv-batch__title { margin: 0; font-size: 14px; font-weight: 800; color: #241b12; overflow-wrap: anywhere; }
+.cv-batch__meta { margin: 2px 0 0; font-size: 12px; color: #857263; overflow-wrap: anywhere; }
+.cv-batch__error { margin: 4px 0 0; font-size: 12.5px; color: #a03a15; }
+
+.cv-history__empty { margin: 8px 0 0; color: #857263; font-size: 13px; }
+.cv-history__filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+.cv-history__filter[aria-pressed='true'] { border-color: #bc4a21; color: #a03a15; background: #fdf1e6; }
+.cv-history__applied { color: #20713f; }

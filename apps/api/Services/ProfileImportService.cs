@@ -229,7 +229,7 @@ public sealed class ProfileImportService
             Id = Guid.NewGuid(),
             UserId = userId,
             ResumeDocumentId = document.Id,
-            Title = "Versão base importada",
+            Title = ResumeQueryService.BaseVersionTitle,
             TargetRole = importData.TargetRole,
             Status = extraction.Report.RequiresReview ? "needs_review" : "draft",
             AtsScore = extraction.Report.TextQualityScore,

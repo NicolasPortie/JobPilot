@@ -2,13 +2,11 @@ import { useState, type ComponentType, type ReactNode } from 'react'
 import {
   ArrowRight,
   ArrowUpRight,
-  CircleHelp,
   FileText,
-  House,
+  ListChecks,
   LogOut,
   Menu,
   RefreshCw,
-  Settings,
   UserRound,
   X,
 } from 'lucide-react'
@@ -27,6 +25,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     label: 'Seu fluxo',
     items: [
       { id: 'resume', icon: FileText, label: 'Currículo', description: 'Adaptar e exportar' },
+      { id: 'applications', icon: ListChecks, label: 'Candidaturas', description: 'Histórico e envios' },
       { id: 'profile', icon: UserRound, label: 'Perfil', description: 'Base profissional' },
     ],
   },
@@ -34,6 +33,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
 
 const pageInfo: Record<string, { eyebrow: string; title: string; description: string }> = {
   resume: { eyebrow: 'Material de candidatura', title: 'Seu currículo, com contexto', description: 'Mantenha uma base verdadeira e adapte cada versão para a oportunidade certa.' },
+  applications: { eyebrow: 'Acompanhamento', title: 'Candidaturas preparadas', description: 'Baixe de novo o currículo de cada vaga, abra o anúncio e marque o que já enviou.' },
   profile: { eyebrow: 'Base profissional', title: 'Tudo começa pelo seu repertório', description: 'Dados claros geram análises melhores e sugestões mais honestas.' },
 }
 
@@ -130,7 +130,7 @@ function Sidebar({ tab, onSelect, onLogout, resumeMeta, className, onClose }: {
   className?: string
   onClose?: () => void
 }) {
-  if (tab === 'resume' && resumeMeta) {
+  if ((tab === 'resume' || tab === 'applications') && resumeMeta) {
     return (
       <aside className={clsx('jp-sidebar flex flex-col px-3 pb-0 pt-5', className)} onClick={(event) => event.stopPropagation()}>
         <div className="mb-2 flex items-center justify-between">
@@ -147,15 +147,18 @@ function Sidebar({ tab, onSelect, onLogout, resumeMeta, className, onClose }: {
 
         <nav className="min-h-0 min-w-0 flex-1 overflow-y-auto pr-1 scrollbar-hide" aria-label="Navegação principal">
           <div className="cv-s-nav">
-            <button className="cv-s-item" onClick={() => onSelect('resume')}>
-              <span className="cv-s-item__icon"><House size={17} /></span>
-              <span className="min-w-0 flex-1"><span className="cv-s-item__label">Início</span></span>
-            </button>
-            <button className="cv-s-item cv-s-item--active" onClick={() => onSelect('resume')} aria-current="page">
+            <button className={clsx('cv-s-item', tab === 'resume' && 'cv-s-item--active')} onClick={() => onSelect('resume')} aria-current={tab === 'resume' ? 'page' : undefined}>
               <span className="cv-s-item__icon"><FileText size={17} /></span>
               <span className="min-w-0 flex-1">
                 <span className="cv-s-item__label">Currículo</span>
                 <span className="cv-s-item__desc">Adaptar e exportar</span>
+              </span>
+            </button>
+            <button className={clsx('cv-s-item', tab === 'applications' && 'cv-s-item--active')} onClick={() => onSelect('applications')} aria-current={tab === 'applications' ? 'page' : undefined}>
+              <span className="cv-s-item__icon"><ListChecks size={17} /></span>
+              <span className="min-w-0 flex-1">
+                <span className="cv-s-item__label">Candidaturas</span>
+                <span className="cv-s-item__desc">Histórico e envios</span>
               </span>
             </button>
             <button className="cv-s-item" onClick={() => onSelect('profile')}>
@@ -179,14 +182,6 @@ function Sidebar({ tab, onSelect, onLogout, resumeMeta, className, onClose }: {
           </div>
 
           <div className="cv-s-foot">
-            <button className="cv-s-item" title="Disponível em breve">
-              <span className="cv-s-item__icon"><Settings size={17} /></span>
-              <span className="min-w-0 flex-1"><span className="cv-s-item__label">Configurações</span></span>
-            </button>
-            <button className="cv-s-item" title="Disponível em breve">
-              <span className="cv-s-item__icon"><CircleHelp size={17} /></span>
-              <span className="min-w-0 flex-1"><span className="cv-s-item__label">Ajuda</span></span>
-            </button>
             <button className="cv-s-item" onClick={onLogout}>
               <span className="cv-s-item__icon"><LogOut size={17} /></span>
               <span className="min-w-0 flex-1"><span className="cv-s-item__label">Sair da conta</span></span>

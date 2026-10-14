@@ -98,6 +98,14 @@ public sealed class JobTargetAnalyzerTests
     }
 
     [Fact]
+    public void Extraction_UsesTheJobLineAsEvidence()
+    {
+        var docker = Extract(Posting).Requirements.Single(x => x.Label == "Docker");
+
+        Assert.Equal("Containerizar serviços com Docker e publicar via GitHub Actions", docker.EvidenceText);
+    }
+
+    [Fact]
     public void Extraction_JavaDoesNotMatchJavaScript()
     {
         var labels = Extract("Requisitos:\n- JavaScript e TypeScript\n- React").Requirements.Select(x => x.Label).ToArray();

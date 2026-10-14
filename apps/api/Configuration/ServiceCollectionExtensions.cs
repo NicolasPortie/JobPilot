@@ -168,6 +168,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ResumeSectionService>();
         services.AddScoped<ResumeReviewAnswerService>();
         services.AddScoped<ResumeQueryService>();
+        services.AddScoped<QuickApplicationService>();
         services.AddScoped<AccountDeletionService>();
         services.AddScoped<RetentionService>();
         services.AddSingleton<ResumeOcrService>();
@@ -244,6 +245,8 @@ public static class ServiceCollectionExtensions
                 policy.SetIsOriginAllowed(allowedOrigins.Contains)
                     .AllowAnyHeader()
                     .AllowAnyMethod()
+                    // O navegador só lê o nome do arquivo baixado se o cabeçalho for exposto.
+                    .WithExposedHeaders("Content-Disposition")
                     .AllowCredentials());
         });
 

@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { AppLayout } from './components/AppLayout'
 import { useJobPilotApp } from './app/useJobPilotApp'
 import { LoginScreen } from './features/auth/LoginScreen'
+import { ApplicationsTab } from './features/applications/ApplicationsTab'
 import { ProfileTab } from './features/profile/ProfileTab'
 import { ResumeAtsTab } from './features/resume/ResumeAtsTab'
 import './index.css'
@@ -13,19 +14,19 @@ function App() {
     validationIssues, profileCompletion,
     resumeDocuments, selectedResumeVersionId, setSelectedResumeVersionId, atsJobDescription, setAtsJobDescription,
     atsJobUrl, setAtsJobUrl,     atsScreenshotFile, setAtsScreenshotFile, atsResumeBusy,
-    atsTailoredResume, atsJobTarget, atsUseAi, setAtsUseAi, atsExportBusy, atsResumeNotice, resumeLayouts,
+    atsTailoredResume, atsJobTarget, atsBatchItems, appliedVersionIds, atsUseAi, setAtsUseAi, atsExportBusy, atsResumeNotice, resumeLayouts,
     selectedLayout, setSelectedLayout,
     profileImportBusy, profileImportResult,
     profileImportNotice, selectedResumeFile, setSelectedResumeFile,
     login, logout, saveProfile, deleteProfile, deleteAccount, retryDanger, retention, dangerNotice, dangerBusy,
     removeRecommendedSkillAddition, importResumeFile, buildAtsResume, buildBaseResume,
-    exportAtsResume, saveReviewAnswer, regenerateAfterAnswers, updateTailoredSection, addProfileSkill,
+    exportAtsResume, downloadVersion, markApplied, startNextJob, saveReviewAnswer, regenerateAfterAnswers, updateTailoredSection, addProfileSkill,
     refresh,
   } = useJobPilotApp()
 
   // Etapa 2 img-to-html: fundo warm só na tela de Currículo (conteúdo entra na Etapa 3).
   useEffect(() => {
-    document.body.classList.toggle('cv-fundo', Boolean(token) && tab === 'resume')
+    document.body.classList.toggle('cv-fundo', Boolean(token) && (tab === 'resume' || tab === 'applications'))
     return () => document.body.classList.remove('cv-fundo')
   }, [token, tab])
 
@@ -104,6 +105,18 @@ function App() {
           onSaveReviewAnswer={saveReviewAnswer}
           onAddProfileSkill={addProfileSkill}
           onUpdateTailoredSection={updateTailoredSection}
+          batchItems={atsBatchItems}
+          appliedVersionIds={appliedVersionIds}
+          onDownloadVersion={(versionId, format) => void downloadVersion(versionId, format)}
+          onMarkApplied={(versionId, applied) => void markApplied(versionId, applied)}
+          onNextJob={startNextJob}
+        />
+      )}
+      {tab === 'applications' && (
+        <ApplicationsTab
+          exportBusy={atsExportBusy}
+          onDownload={(versionId, format) => void downloadVersion(versionId, format)}
+          onMarkApplied={markApplied}
         />
       )}
     </AppLayout>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { configureApiToken } from '../api/client'
 import { authClient } from '../api/authClient'
 import { profileClient, type RetentionPolicy } from '../api/profileClient'
-import type { AtsProfileSkillAddition, JobTargetDetail, Profile, ProfileValidationIssue, ResumeDocumentSummary, ResumeImportResult, ResumeLayoutOption, TailoredResume } from '../types'
+import type { AtsProfileSkillAddition, JobTargetDetail, Profile, ProfileValidationIssue, QuickTailorItem, ResumeDocumentSummary, ResumeImportResult, ResumeLayoutOption, TailoredResume } from '../types'
 import { emptyProfile, fallbackResumeLayouts } from './defaults'
 import { loadJobPilotTab } from './dataLoaders'
 import { useResumeWorkflow } from './useResumeWorkflow'
@@ -48,6 +48,8 @@ export function useJobPilotApp() {
   const [atsResumeBusy, setAtsResumeBusy] = useState(false)
   const [atsTailoredResume, setAtsTailoredResume] = useState<TailoredResume | null>(null)
   const [atsJobTarget, setAtsJobTarget] = useState<JobTargetDetail | null>(null)
+  const [atsBatchItems, setAtsBatchItems] = useState<QuickTailorItem[]>([])
+  const [appliedVersionIds, setAppliedVersionIds] = useState<string[]>([])
   const [atsUseAi, setAtsUseAi] = useState(true)
   const [atsExportBusy, setAtsExportBusy] = useState(false)
   const [atsResumeNotice, setAtsResumeNotice] = useState('')
@@ -143,11 +145,19 @@ export function useJobPilotApp() {
     localStorage.setItem(recommendedSkillsStorageKey, JSON.stringify(recommendedSkillAdditions))
   }, [recommendedSkillAdditions])
 
+  const clearJobInputs = useCallback(() => {
+    setAtsJobDescription('')
+    setAtsJobUrl('')
+  }, [])
+
   const {
     importResumeFile,
     buildAtsResume,
     buildBaseResume,
     exportAtsResume,
+    downloadVersion,
+    markApplied,
+    startNextJob,
     saveReviewAnswer,
     regenerateAfterAnswers,
     updateTailoredSection,
@@ -178,6 +188,9 @@ export function useJobPilotApp() {
     setAtsExportBusy,
     setAtsResumeNotice,
     setReviewAnswers,
+    setAtsBatchItems,
+    setAppliedVersionIds,
+    clearJobInputs,
     refresh,
   })
 
@@ -272,6 +285,8 @@ export function useJobPilotApp() {
     atsResumeBusy,
     atsTailoredResume,
     atsJobTarget,
+    atsBatchItems,
+    appliedVersionIds,
     atsUseAi,
     setAtsUseAi,
     atsExportBusy,
@@ -293,6 +308,9 @@ export function useJobPilotApp() {
     buildAtsResume,
     buildBaseResume,
     exportAtsResume,
+    downloadVersion,
+    markApplied,
+    startNextJob,
     saveReviewAnswer,
     regenerateAfterAnswers,
     updateTailoredSection,

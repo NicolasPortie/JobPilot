@@ -30,7 +30,8 @@ export async function loadJobPilotTab(state: JobPilotDataLoaderState) {
   state.setSelectedResumeVersionId((current) => {
     const versions = nextResumeDocuments.flatMap((document) => document.versions)
     if (versions.some((version) => version.id === current)) return current
-    const baseVersions = versions.filter((version) => version.title.toLowerCase().includes('base importada'))
+    const baseVersions = versions.filter((version) =>
+      version.kind ? version.kind === 'base' : version.title.toLowerCase().includes('base importada'))
     const latestVersion = (baseVersions.length > 0 ? baseVersions : versions)
       .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0]
     return latestVersion?.id ?? ''

@@ -170,7 +170,7 @@ public sealed class ResumeController(
         // FileStreamResult em vez de PhysicalFile: não exige volume compartilhado
         // entre réplicas e libera o handle ao fim da resposta.
         var stream = System.IO.File.OpenRead(export.FilePath);
-        return File(stream, contentType, Path.GetFileName(export.FilePath));
+        return File(stream, contentType, await exports.DownloadFileNameAsync(User.UserId(), export));
     }
 
     /// <summary>

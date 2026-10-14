@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type KeyboardEvent } from 'react'
 import { CircleHelp, FileText, Link2, Paperclip, Upload } from 'lucide-react'
 
 type JobTab = 'desc' | 'link' | 'file'
@@ -10,13 +10,20 @@ type Props = {
   setJobUrl: (value: string) => void
   screenshotFile: File | null
   setScreenshotFile: (value: File | null) => void
+  /** Ctrl/Cmd + Enter nos campos de texto gera o currículo. */
+  onSubmit?: () => void
 }
 
-const MAX_DESC = 2000
-
-export function ResumeJobInput({ jobDescription, setJobDescription, jobUrl, setJobUrl, screenshotFile, setScreenshotFile }: Props) {
+export function ResumeJobInput({ jobDescription, setJobDescription, jobUrl, setJobUrl, screenshotFile, setScreenshotFile, onSubmit }: Props) {
   const [jobTab, setJobTab] = useState<JobTab>('desc')
   const descRef = useRef<HTMLTextAreaElement>(null)
+
+  function submitOnShortcut(event: KeyboardEvent) {
+    if (onSubmit && event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault()
+      onSubmit()
+    }
+  }
 
   return (
     <section className="cv-card cv-step" aria-labelledby="cv-passo2">
@@ -24,7 +31,7 @@ export function ResumeJobInput({ jobDescription, setJobDescription, jobUrl, setJ
         <span className="cv-stepnum" aria-hidden>2</span>
         <div>
           <h2 className="cv-steptitle" id="cv-passo2">Dados da vaga</h2>
-          <p className="cv-stepsub">Informe os dados da vaga para que o JobPilot possa adaptar seu currículo.</p>
+          <p className="cv-stepsub">Cole a descrição ou o link (ou vários links, um por linha). Ctrl + Enter gera o currículo.</p>
         </div>
         <span className="cv-stephead__side">
           <button className="cv-helplink" onClick={() => { setJobTab('desc'); descRef.current?.focus() }}>
@@ -53,25 +60,26 @@ export function ResumeJobInput({ jobDescription, setJobDescription, jobUrl, setJ
             ref={descRef}
             className="cv-textarea"
             value={jobDescription}
-            maxLength={MAX_DESC}
+            maxLength={60000}
             onChange={(event) => setJobDescription(event.target.value)}
+            onKeyDown={submitOnShortcut}
             placeholder="Cole aqui a descrição completa da vaga, incluindo responsabilidades, requisitos, tecnologias e benefícios. Quanto mais detalhes, melhor será a adaptação."
           />
-          <p className="cv-counter">{jobDescription.length}/{MAX_DESC}</p>
         </div>
       )}
       {jobTab === 'link' && (
         <div className="cv-field">
           <label className="cv-label" htmlFor="cv-link">Link da vaga</label>
-          <input
+          <textarea
             id="cv-link"
-            className="cv-input"
+            className="cv-textarea cv-textarea--short"
             value={jobUrl}
+            rows={3}
             onChange={(event) => setJobUrl(event.target.value)}
+            onKeyDown={submitOnShortcut}
             placeholder="https://empresa.com/vaga"
-            type="url"
           />
-          <p className="cv-hint">O JobPilot lê o anúncio e extrai requisitos, tecnologias e senioridade.</p>
+          <p className="cv-hint">O JobPilot lê o anúncio e extrai requisitos, tecnologias e senioridade. Cole um link por linha para gerar vários currículos de uma vez (até 15).</p>
         </div>
       )}
       {jobTab === 'file' && (

@@ -3,7 +3,8 @@ import type { ComponentProps } from 'react'
 import { AxiosHeaders } from 'axios'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { resumeClient } from '../../api/resumeClient'import { aiClient } from '../../api/aiClient'
+import { resumeClient } from '../../api/resumeClient'
+import { aiClient } from '../../api/aiClient'
 import type { JobTargetDetail, ResumeSection, TailoredResume } from '../../types'
 import { ResumeAtsTab } from './ResumeAtsTab'
 
@@ -82,7 +83,10 @@ function InputHarness({ props }: { props: Props }) {
 }
 
 describe('ResumeAtsTab workflow', () => {
-  beforeEach(() => {    vi.mocked(resumeClient.listSections).mockResolvedValue(sectionsResponse([]))    vi.mocked(aiClient.status).mockResolvedValue({ data: { configured: false, available: false } } as Awaited<ReturnType<typeof aiClient.status>>)  })
+  beforeEach(() => {
+    vi.mocked(resumeClient.listSections).mockResolvedValue(sectionsResponse([]))
+    vi.mocked(aiClient.status).mockResolvedValue({ data: { configured: false, available: false } } as Awaited<ReturnType<typeof aiClient.status>>)
+  })
   afterEach(() => { cleanup(); vi.resetAllMocks(); vi.unstubAllGlobals() })
 
   it('keeps job inputs across tabs and enables adaptation from an attached file', async () => {
@@ -172,7 +176,7 @@ describe('ResumeAtsTab workflow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Adaptar currículo para esta vaga' }))
     expect(output.value).toBe('Texto gerado')
     expect(props.onBuild).toHaveBeenCalledOnce()
-    fireEvent.click(screen.getByRole('button', { name: 'Word' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Word' }).at(-1)!)
     fireEvent.click(screen.getByRole('button', { name: 'Exportar PDF' }))
     expect(props.onExport).toHaveBeenNthCalledWith(1, 'word')
     expect(props.onExport).toHaveBeenNthCalledWith(2, 'pdf')

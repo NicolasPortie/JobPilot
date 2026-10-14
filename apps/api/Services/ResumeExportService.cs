@@ -93,6 +93,19 @@ public sealed class ResumeExportService(JobPilotDbContext db, IConfiguration con
     public async Task<ResumeExport?> GetAsync(Guid userId, Guid exportId) =>
         await db.ResumeExports.FirstOrDefaultAsync(x => x.Id == exportId && x.UserId == userId);
 
+    /// <summary>Nome do arquivo baixado: Curriculo-Nome-Sobrenome-Cargo-Empresa.ext (o arquivo em disco leva um GUID).</summary>
+    public async Task<string> DownloadFileNameAsync(Guid userId, ResumeExport export)
+    {
+        var version = await db.ResumeVersions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == export.ResumeVersionId && x.UserId == userId);
+        var fullName = (await db.CandidateProfiles.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == userId))?.FullName ?? "";
+        var nameParts = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2);
+        var parts = new[] { "Curriculo", string.Join(" ", nameParts), version?.TargetRole ?? "", version?.TargetCompany ?? "" }
+            .Where(part => !string.IsNullOrWhiteSpace(part));
+        var baseName = MakeSafeFileName(string.Join(" ", parts));
+        var extension = Path.GetExtension(export.FilePath);
+        return baseName + extension;
+    }
+
     private static ResumeExportResponse ToResponse(ResumeExport export) =>
         new(export.Id, export.ResumeVersionId, export.Format, ParseWarnings(export.ParseWarningsJson), export.CreatedAt);
 

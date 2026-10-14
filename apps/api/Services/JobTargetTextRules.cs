@@ -138,6 +138,8 @@ internal static class JobTargetTextRules
     public static string EvidenceAround(string text, string term)
     {
         if (string.IsNullOrWhiteSpace(text)) return "";
+        var line = LineWithTerm(text, term);
+        if (line.Length is > 0 and <= 140) return line;
         var normalizedText = RemoveDiacritics(text).ToLowerInvariant();
         var normalizedTerm = RemoveDiacritics(term).ToLowerInvariant();
         var index = normalizedText.IndexOf(normalizedTerm, StringComparison.Ordinal);
@@ -156,6 +158,20 @@ internal static class JobTargetTextRules
         if (start > 0) snippet = "..." + snippet;
         if (end < text.Length) snippet += "...";
         return snippet.Length > 100 ? snippet[..97].Trim() + "..." : snippet;
+    }
+
+    /// <summary>A linha (item de lista) da vaga em que o termo aparece, sem marcador; vazio se não achar.</summary>
+    private static string LineWithTerm(string text, string term)
+    {
+        var plainTerm = RemoveDiacritics(term).Trim();
+        if (plainTerm.Length == 0) return "";
+        var pattern = new Regex(@"(?<![\p{L}\p{N}])" + Regex.Escape(plainTerm) + @"(?![\p{L}\p{N}])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        foreach (var raw in text.Replace("\r", "").Split('\n'))
+        {
+            var line = raw.Trim().TrimStart('-', '•', '●', '*', ' ').Trim();
+            if (line.Length > 0 && pattern.IsMatch(RemoveDiacritics(line))) return line;
+        }
+        return "";
     }
 
     public static string BuildSummary(string text)

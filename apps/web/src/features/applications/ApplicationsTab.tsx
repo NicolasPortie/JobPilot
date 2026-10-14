@@ -1,0 +1,104 @@
+import { useCallback, useEffect, useState } from 'react'
+import { Download, ExternalLink, RefreshCw, Send } from 'lucide-react'
+import { applicationsClient } from '../../api/applicationsClient'
+import { responseMessage } from '../../app/utils'
+import type { ApplicationHistoryItem } from '../../types'
+
+type Filter = 'all' | 'pending' | 'applied'
+
+type Props = {
+  exportBusy: boolean
+  onDownload: (versionId: string, format: 'word' | 'pdf') => void
+  onMarkApplied: (versionId: string, applied: boolean) => Promise<void> | void
+}
+
+export function ApplicationsTab({ exportBusy, onDownload, onMarkApplied }: Props) {
+  const [items, setItems] = useState<ApplicationHistoryItem[]>([])
+  const [filter, setFilter] = useState<Filter>('all')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const { data } = await applicationsClient.history()
+      setItems(data)
+    } catch (failure: unknown) {
+      setError(responseMessage(failure, 'Não foi possível carregar as candidaturas.'))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { queueMicrotask(() => void load()) }, [load])
+
+  async function toggleApplied(item: ApplicationHistoryItem) {
+    await onMarkApplied(item.resumeVersionId, !item.applied)
+    setItems((current) => current.map((entry) =>
+      entry.resumeVersionId === item.resumeVersionId ? { ...entry, applied: !item.applied } : entry))
+  }
+
+  const visible = items.filter((item) => filter === 'all' || (filter === 'applied' ? item.applied : !item.applied))
+  const appliedCount = items.filter((item) => item.applied).length
+
+  return (
+    <div className="cv-page" style={{ display: 'block' }}>
+      <section className="cv-card" aria-labelledby="cv-historico">
+        <div className="cv-row cv-row--between">
+          <div>
+            <h2 className="cv-steptitle" id="cv-historico">Candidaturas preparadas</h2>
+            <p className="cv-stepsub">{items.length === 0 ? 'Nenhum currículo adaptado ainda.' : `${items.length} currículos adaptados · ${appliedCount} enviados`}</p>
+          </div>
+          <button className="cv-btn cv-btn--secondary cv-btn--small" onClick={() => void load()} disabled={loading} aria-busy={loading}>
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Atualizar
+          </button>
+        </div>
+
+        <div className="cv-history__filters" role="group" aria-label="Filtrar candidaturas">
+          {([['all', 'Todas'], ['pending', 'A enviar'], ['applied', 'Enviadas']] as const).map(([key, label]) => (
+            <button key={key} className="cv-btn cv-btn--secondary cv-btn--small cv-history__filter" aria-pressed={filter === key} onClick={() => setFilter(key)}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {error && <div className="cv-alert cv-alert--amber" role="alert">{error}</div>}
+        {!error && !loading && visible.length === 0 && (
+          <p className="cv-history__empty">{items.length === 0 ? 'Gere um currículo na aba Currículo e ele aparece aqui.' : 'Nada neste filtro.'}</p>
+        )}
+
+        <div className="cv-batch">
+          {visible.map((item) => (
+            <div key={item.resumeVersionId} className="cv-batch__item">
+              <div className="cv-batch__body">
+                <p className="cv-batch__title">{item.role || 'Vaga sem título'}{item.company ? ` · ${item.company}` : ''}</p>
+                <p className="cv-batch__meta">
+                  {formatDate(item.createdAt)}{item.location ? ` · ${item.location}` : ''} · aderência {Math.round(item.atsScore)}
+                  {item.applied && <span className="cv-history__applied"> · enviada</span>}
+                </p>
+              </div>
+              <div className="cv-resultbar__actions">
+                <button className="cv-btn cv-btn--primary cv-btn--small" onClick={() => onDownload(item.resumeVersionId, 'pdf')} disabled={exportBusy}><Download size={14} /> PDF</button>
+                <button className="cv-btn cv-btn--secondary cv-btn--small" onClick={() => onDownload(item.resumeVersionId, 'word')} disabled={exportBusy}>Word</button>
+                {item.sourceUrl && (
+                  <a className="cv-btn cv-btn--secondary cv-btn--small" href={item.sourceUrl} target="_blank" rel="noreferrer noopener"><ExternalLink size={14} /> Abrir vaga</a>
+                )}
+                <button className="cv-btn cv-btn--secondary cv-btn--small" aria-pressed={item.applied} onClick={() => void toggleApplied(item)}>
+                  <Send size={14} /> {item.applied ? 'Enviada ✓' : 'Marcar enviada'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function formatDate(value: string) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/\./g, '')
+}

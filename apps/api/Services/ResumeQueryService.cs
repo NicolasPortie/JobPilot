@@ -70,6 +70,31 @@ public sealed class ResumeQueryService(
                     .ToArray());
     }
 
+    /// <summary>Último currículo importado de arquivo; é a base de qualquer adaptação por vaga.</summary>
+    public async Task<Guid?> LatestBaseVersionIdAsync(Guid userId)
+    {
+        var imported = await versions.Query()
+            .Where(version => version.UserId == userId && version.Title == BaseVersionTitle)
+            .OrderByDescending(version => version.CreatedAt)
+            .Select(version => (Guid?)version.Id)
+            .FirstOrDefaultAsync();
+        if (imported is not null) return imported;
+
+        return await versions.Query()
+            .Where(version => version.UserId == userId && !version.AtsReportJson.Contains("tailored_resume"))
+            .OrderByDescending(version => version.CreatedAt)
+            .Select(version => (Guid?)version.Id)
+            .FirstOrDefaultAsync();
+    }
+
+    public const string BaseVersionTitle = "Versão base importada";
+
     private static ResumeVersionSummary ToVersionSummary(ResumeVersion version) =>
-        new(version.Id, version.Title, version.Status, version.TargetRole, version.TargetCompany, version.AtsScore, version.UpdatedAt);
+        new(version.Id, version.Title, version.Status, version.TargetRole, version.TargetCompany, version.AtsScore, version.UpdatedAt, KindOf(version));
+
+    private static string KindOf(ResumeVersion version) =>
+        version.Title == BaseVersionTitle ? "base"
+        : version.AtsReportJson.Contains("tailored_resume") ? "tailored"
+        : version.AtsReportJson.Contains("generic_ats_resume") ? "ats"
+        : "other";
 }

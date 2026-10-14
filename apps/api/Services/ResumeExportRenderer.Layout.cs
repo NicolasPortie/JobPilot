@@ -5,7 +5,7 @@ public static partial class ResumeExportRenderer
     private static string BuildCss(ResumeLayoutProfile profile) =>
         $$"""
         @page {
-          size: Letter;
+          size: A4;
           margin: {{Css(profile.PageMarginIn)}}in;
         }
 
@@ -25,8 +25,8 @@ public static partial class ResumeExportRenderer
         }
 
         .resume-sheet {
-          width: 8.5in;
-          min-height: 11in;
+          width: 210mm;
+          min-height: 297mm;
           margin: 24px auto;
           padding: {{Css(profile.PageMarginIn)}}in;
           background: #ffffff;

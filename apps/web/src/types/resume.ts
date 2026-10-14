@@ -24,6 +24,8 @@ export type ResumeVersionSummary = {
   targetCompany: string
   atsScore: number
   updatedAt: string
+  /** Calculado no backend: base importada, adaptada a uma vaga, ATS geral ou outra. */
+  kind?: 'base' | 'tailored' | 'ats' | 'other'
 }
 
 export type ResumeSection = {
@@ -116,3 +118,27 @@ export type ResumeReviewQuestion = {
   reason: string
 }
 
+export type QuickTailorItem = {
+  input: string
+  succeeded: boolean
+  error?: string | null
+  target?: JobTargetDetail | null
+  tailored?: TailoredResume | null
+}
+
+export type QuickTailorResponse = {
+  items: QuickTailorItem[]
+  baseResumeVersionId: string
+}
+
+export type ApplicationHistoryItem = {
+  resumeVersionId: string
+  jobTargetId?: string | null
+  role: string
+  company: string
+  location: string
+  sourceUrl: string
+  atsScore: number
+  applied: boolean
+  createdAt: string
+}

@@ -58,14 +58,14 @@ public static partial class ResumeExportRenderer
         await using var browser = await LaunchChromiumAsync(playwright);
         var page = await browser.NewPageAsync(new BrowserNewPageOptions
         {
-            ViewportSize = new ViewportSize { Width = 1020, Height = 1320 },
+            ViewportSize = new ViewportSize { Width = 794, Height = 1123 },
             DeviceScaleFactor = 1
         });
         await page.SetContentAsync(html, new PageSetContentOptions { WaitUntil = WaitUntilState.Load });
         await page.PdfAsync(new PagePdfOptions
         {
             Path = fullPath,
-            Format = "Letter",
+            Format = "A4",
             PrintBackground = true,
             PreferCSSPageSize = true
         });
@@ -262,7 +262,7 @@ public static partial class ResumeExportRenderer
         }
 
         body.Add(new XElement(w + "sectPr",
-            new XElement(w + "pgSz", new XAttribute(w + "w", "12240"), new XAttribute(w + "h", "15840")),
+            new XElement(w + "pgSz", new XAttribute(w + "w", "11906"), new XAttribute(w + "h", "16838")),
             new XElement(w + "pgMar", new XAttribute(w + "top", PageMarginTwips(profile.PageMarginIn)), new XAttribute(w + "right", PageMarginTwips(profile.PageMarginIn)), new XAttribute(w + "bottom", PageMarginTwips(profile.PageMarginIn)), new XAttribute(w + "left", PageMarginTwips(profile.PageMarginIn))),
             new XElement(w + "cols", new XAttribute(w + "num", "1"))));
 

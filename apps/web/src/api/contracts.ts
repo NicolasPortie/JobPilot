@@ -35,3 +35,10 @@ export type RegenerateAfterAnswersResponse = {
 }
 export type UpdateResumeSectionRequest = { title?: string; contentJson: string }
 export type CreateResumeSectionRequest = { sectionType: string; title: string; contentJson: string }
+export type QuickTailorRequest = {
+  input: string
+  jobUrl?: string
+  useAi: boolean
+  layout?: string
+  baseResumeVersionId?: string
+}

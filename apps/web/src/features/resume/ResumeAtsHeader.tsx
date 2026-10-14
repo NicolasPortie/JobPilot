@@ -9,8 +9,8 @@ export function ResumeAtsHeader({ profile }: { profile: Pick<Profile, 'fullName'
         <p className="cv-eyebrow">CURRÍCULO QUE TE APROXIMA</p>
         <h1 className="cv-h1">Adapte seu currículo para esta vaga</h1>
         <p className="cv-lead">
-          O JobPilot compara os requisitos da vaga com o seu perfil e gera uma versão do seu currículo
-          mais alinhada, pronta para aumentar suas chances no processo seletivo.
+          Cole a vaga e receba, em segundos, uma versão verdadeira do seu currículo ajustada ao que ela pede.
+          Você revisa, baixa o PDF e envia a candidatura.
         </p>
       </div>
       <div className="cv-top">

@@ -1,5 +1,6 @@
 import { AxiosHeaders } from 'axios'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { applicationsClient } from '../api/applicationsClient'
 import { jobTargetClient } from '../api/jobTargetClient'
 import { resumeClient } from '../api/resumeClient'
 import type { JobTargetDetail, ResumeVersionDetail, TailoredResume } from '../types'
@@ -71,6 +72,10 @@ beforeEach(() => {
     }))
   vi.spyOn(resumeClient, 'buildAts').mockImplementation((payload) => record('buildAts', payload, draft))
   vi.spyOn(resumeClient, 'tailor').mockImplementation((payload) => record('tailor', payload, draft))
+  vi.spyOn(applicationsClient, 'quick').mockImplementation((payload) => record('quick', payload, {
+    baseResumeVersionId: payload.baseResumeVersionId ?? '',
+    items: [{ input: payload.input, succeeded: true, target: job, tailored: draft }],
+  }))
   vi.spyOn(jobTargetClient, 'organize').mockImplementation((payload) => record('organize', payload, job))
   vi.spyOn(jobTargetClient, 'organizeScreenshot').mockImplementation((payload, query) => record('organizeScreenshot', { payload, query }, job))
   vi.spyOn(resumeClient, 'updateSection').mockResolvedValue(response(version.sections[0]))
@@ -184,20 +189,24 @@ describe('AI preference', () => {
     { atsJobDescription: 'Vaga SQL', atsJobUrl: '', atsScreenshotFile: null },
     { atsJobDescription: '', atsJobUrl: 'https://example.com/job', atsScreenshotFile: null },
     { atsJobDescription: '', atsJobUrl: '', atsScreenshotFile: new File(['vaga'], 'vaga.png') },
-  ])('honors disabled AI when organizing and tailoring $atsJobDescription $atsJobUrl', async (input) => {
+  ])('honors disabled AI when generating from $atsJobDescription $atsJobUrl', async (input) => {
     const state = makeState(input)
     await useResumeWorkflow(state).buildAtsResume()
-    expect(requests).toHaveLength(2)
-    const organization = requests[0]
     if (input.atsScreenshotFile) {
+      expect(requests).toHaveLength(2)
       expect(jobTargetClient.organizeScreenshot).toHaveBeenCalledWith(expect.any(FormData), 'useAi=false')
       expect(vi.mocked(jobTargetClient.organizeScreenshot).mock.calls[0][0].get('file')).toBe(input.atsScreenshotFile)
+      expect(requests[1]).toMatchObject({ operation: 'tailor', body: {
+        baseResumeVersionId: 'base-version', jobTargetId: 'job', layout: 'ats_standard', useAi: false,
+      } })
     } else {
-      expect(organization.body).toMatchObject({ useAi: false, sourceKind: input.atsJobUrl ? 'url' : 'manual_text' })
+      // Texto e links vão numa só chamada: o servidor organiza a vaga e adapta o currículo.
+      expect(requests).toHaveLength(1)
+      expect(requests[0]).toMatchObject({ operation: 'quick', body: {
+        input: input.atsJobDescription || input.atsJobUrl, baseResumeVersionId: 'base-version',
+        layout: 'ats_standard', useAi: false,
+      } })
     }
-    expect(requests[1]).toMatchObject({ operation: 'tailor', body: {
-      baseResumeVersionId: 'base-version', jobTargetId: 'job', layout: 'ats_standard', useAi: false,
-    } })
     expect(state.refresh).toHaveBeenCalledOnce()
     expect(state.setAtsResumeBusy).toHaveBeenLastCalledWith(false)
   })

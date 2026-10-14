@@ -4,10 +4,11 @@ import {
   AlertCircle,
   ArrowLeftRight,
   ArrowRight,
+  ExternalLink,
   Check,
-  Clock,
   Copy,
   Download,
+  Send,
   FileText,
   PencilLine,
   RefreshCw,
@@ -26,6 +27,7 @@ import type {
   JobTargetDetail,
   Profile,
   ProfileValidationIssue,
+  QuickTailorItem,
   ResumeDocumentSummary,
   ResumeLayoutOption,
   TailoredResume,
@@ -61,6 +63,12 @@ type Props = {
   onSaveReviewAnswer?: (requirementId: string, label: string, question: string, value: string, type: string) => Promise<void>
   onAddProfileSkill: (skill: string, context?: { kind?: 'missing' | 'related'; reason?: string }) => Promise<void>
   onUpdateTailoredSection: (sectionId: string, contentJson: string) => Promise<void>
+  /** Fluxo rápido: lote gerado, candidaturas já marcadas e ações por versão. */
+  batchItems?: QuickTailorItem[]
+  appliedVersionIds?: string[]
+  onDownloadVersion?: (versionId: string, format: 'word' | 'pdf') => void
+  onMarkApplied?: (versionId: string, applied: boolean) => void
+  onNextJob?: () => void
 }
 
 export function ResumeAtsTab(props: Props) {
@@ -94,6 +102,11 @@ export function ResumeAtsTab(props: Props) {
     onSaveReviewAnswer,
     onAddProfileSkill,
     onUpdateTailoredSection,
+    batchItems = [],
+    appliedVersionIds = [],
+    onDownloadVersion,
+    onMarkApplied,
+    onNextJob,
   } = props
   const [showSectionEditor, setShowSectionEditor] = useState(false)
   const [textOverride, setTextOverride] = useState<string | null>(null)
@@ -102,8 +115,12 @@ export function ResumeAtsTab(props: Props) {
   const versions = documents.flatMap((document) =>
     document.versions.map((version) => ({ ...version, documentTitle: document.title })),
   )
-  const activeVersion = versions.find((version) => version.id === selectedVersionId)
-    ?? [...versions].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0]
+  // A adaptação parte sempre de um currículo importado (kind vem do backend), nunca de uma versão já adaptada.
+  const baseCandidates = versions.filter((version) =>
+    version.kind ? version.kind === 'base' : version.title.toLowerCase().includes('base importada'))
+  const selectable = baseCandidates.length > 0 ? baseCandidates : versions
+  const activeVersion = selectable.find((version) => version.id === selectedVersionId)
+    ?? [...selectable].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0]
   const activeVersionId = activeVersion?.id ?? ''
 
   const hasJobInput = Boolean(jobDescription.trim() || jobUrl.trim() || screenshotFile)
@@ -167,15 +184,21 @@ export function ResumeAtsTab(props: Props) {
     }
   }
 
+  const canBuild = !busy && Boolean(activeVersion) && hasJobInput
+
   function buildResume() {
+    if (!canBuild) return
     setTextOverride(null)
     onBuild()
   }
 
+  const jobUrlToOpen = jobTarget?.sourceUrl || (/^https?:\/\/\S+$/i.test(jobUrl.trim()) ? jobUrl.trim() : '')
+  const currentApplied = draft ? appliedVersionIds.includes(draft.tailoredVersionId) : false
+
   function cycleVersion() {
-    if (versions.length > 1 && activeVersion) {
-      const index = versions.findIndex((version) => version.id === activeVersion.id)
-      onSelectVersion(versions[(index + 1) % versions.length].id)
+    if (selectable.length > 1 && activeVersion) {
+      const index = selectable.findIndex((version) => version.id === activeVersion.id)
+      onSelectVersion(selectable[(index + 1) % selectable.length].id)
     } else {
       setTab('profile')
     }
@@ -213,7 +236,7 @@ export function ResumeAtsTab(props: Props) {
                 {activeVersion && baseReady && <Check size={13} />}
                 {activeVersion && baseReady ? 'Base pronta' : 'Ação necessária'}
               </span>
-              <button className="cv-btn cv-btn--secondary" style={{ minHeight: 38 }} onClick={cycleVersion} title={versions.length > 1 ? 'Alternar entre currículos importados' : 'Importar currículo no Perfil'}>
+              <button className="cv-btn cv-btn--secondary" style={{ minHeight: 38 }} onClick={cycleVersion} title={selectable.length > 1 ? 'Alternar entre currículos importados' : 'Importar currículo no Perfil'}>
                 Trocar <ArrowLeftRight size={15} />
               </button>
             </div>
@@ -236,6 +259,7 @@ export function ResumeAtsTab(props: Props) {
             setJobUrl={setJobUrl}
             screenshotFile={screenshotFile}
             setScreenshotFile={setScreenshotFile}
+            onSubmit={buildResume}
           />
 
           <section className="cv-card cv-step cv-step--last" aria-labelledby="cv-passo3">
@@ -267,8 +291,59 @@ export function ResumeAtsTab(props: Props) {
             )}
           </section>
 
+          {batchItems.length > 0 && (
+            <section className="cv-card" aria-label="Currículos gerados">
+              <h2 className="cv-steptitle">Currículos gerados</h2>
+              <p className="cv-stepsub">Baixe cada PDF, abra a vaga e envie a candidatura. Marque como enviada para acompanhar depois.</p>
+              <div className="cv-batch">
+                {batchItems.map((item) => {
+                  const versionId = item.tailored?.tailoredVersionId ?? ''
+                  const applied = appliedVersionIds.includes(versionId)
+                  const link = item.target?.sourceUrl ?? ''
+                  return (
+                    <div key={item.input} className={`cv-batch__item${item.succeeded ? '' : ' cv-batch__item--error'}`}>
+                      <div className="cv-batch__body">
+                        <p className="cv-batch__title">{item.target ? `${item.target.title}${item.target.company ? ` · ${item.target.company}` : ''}` : item.input}</p>
+                        {item.succeeded && item.tailored && <p className="cv-batch__meta">Aderência {Math.round(item.tailored.atsScore)} · {item.tailored.status === 'ready' ? 'pronto' : 'revise antes de enviar'}</p>}
+                        {!item.succeeded && <p className="cv-batch__error">{item.error ?? 'Não foi possível gerar este currículo.'}</p>}
+                      </div>
+                      {item.succeeded && versionId && (
+                        <div className="cv-resultbar__actions">
+                          <button className="cv-btn cv-btn--primary cv-btn--small" onClick={() => onDownloadVersion?.(versionId, 'pdf')} disabled={exportBusy}><Download size={14} /> PDF</button>
+                          <button className="cv-btn cv-btn--secondary cv-btn--small" onClick={() => onDownloadVersion?.(versionId, 'word')} disabled={exportBusy}>Word</button>
+                          {link && <a className="cv-btn cv-btn--secondary cv-btn--small" href={link} target="_blank" rel="noreferrer noopener"><ExternalLink size={14} /> Abrir vaga</a>}
+                          <button className="cv-btn cv-btn--secondary cv-btn--small" aria-pressed={applied} onClick={() => onMarkApplied?.(versionId, !applied)}>
+                            <Send size={14} /> {applied ? 'Enviada ✓' : 'Marcar enviada'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+              {onNextJob && <div className="cv-row" style={{ marginTop: 14 }}><button className="cv-btn cv-btn--secondary cv-btn--small" onClick={onNextJob}>Novas vagas</button></div>}
+            </section>
+          )}
+
           {!draft ? null : (
             <>
+              <section className="cv-card cv-resultbar" aria-label="Ações do currículo gerado">
+                <div className="cv-resultbar__info">
+                  <p className="cv-resultbar__title">{jobTarget ? `${jobTarget.title}${jobTarget.company ? ` · ${jobTarget.company}` : ''}` : draft.version.title}</p>
+                  <p className="cv-resultbar__meta">Aderência {Math.round(draft.atsScore)} · {draft.status === 'ready' ? 'pronto para enviar' : 'revise os pontos abaixo antes de enviar'}</p>
+                </div>
+                <div className="cv-resultbar__actions">
+                  <button className="cv-btn cv-btn--primary cv-btn--small" onClick={() => onExport('pdf')} disabled={exportBusy}><Download size={14} /> {exportBusy ? 'Exportando…' : 'Baixar PDF'}</button>
+                  <button className="cv-btn cv-btn--secondary cv-btn--small" onClick={() => onExport('word')} disabled={exportBusy}>Word</button>
+                  {jobUrlToOpen && <a className="cv-btn cv-btn--secondary cv-btn--small" href={jobUrlToOpen} target="_blank" rel="noreferrer noopener"><ExternalLink size={14} /> Abrir vaga</a>}
+                  {jobTarget && onMarkApplied && (
+                    <button className="cv-btn cv-btn--secondary cv-btn--small" aria-pressed={currentApplied} onClick={() => onMarkApplied(draft.tailoredVersionId, !currentApplied)}>
+                      <Send size={14} /> {currentApplied ? 'Enviada ✓' : 'Marcar enviada'}
+                    </button>
+                  )}
+                  {onNextJob && <button className="cv-btn cv-btn--secondary cv-btn--small" onClick={onNextJob}>Próxima vaga</button>}
+                </div>
+              </section>
               {jobTarget && (
                 <section className="cv-card" id="cv-requisitos" aria-label="Requisitos em contexto">
                   <h2 className="cv-steptitle">Requisitos em contexto</h2>
@@ -386,13 +461,13 @@ export function ResumeAtsTab(props: Props) {
       />
 
       <footer className="cv-footer">
-        <span className="cv-footer__note"><Clock size={15} /> Última alteração há alguns segundos</span>
+        <span className="cv-footer__note">{hasJobInput ? 'Ctrl + Enter também gera o currículo.' : 'Cole a vaga para começar.'}</span>
         <div className="cv-footer__actions">
           <ResumeAiControl enabled={useAi} busy={busy} onToggle={onToggleUseAi} />
           <button className="cv-btn cv-btn--secondary" onClick={() => void saveOutput()} disabled={!plainTextSectionId || !outputText.trim() || savingOutput} title="Salvar o texto revisado">
             <Save size={15} /> Salvar rascunho
           </button>
-          <button className="cv-btn cv-btn--primary" onClick={buildResume} disabled={busy || !activeVersion || !hasJobInput} title={!hasJobInput ? 'Cole a descrição ou adicione um link para adaptar' : 'Adaptar currículo para esta vaga'}>
+          <button className="cv-btn cv-btn--primary" onClick={buildResume} disabled={!canBuild} title={!hasJobInput ? 'Cole a descrição ou adicione um link para adaptar' : 'Adaptar currículo para esta vaga'}>
             {busy ? <RefreshCw className="animate-spin" size={15} /> : null}
             {busy ? 'Comparando vaga…' : 'Adaptar currículo para esta vaga'} <ArrowRight size={15} />
           </button>

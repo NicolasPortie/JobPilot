@@ -42,11 +42,14 @@ public sealed class ResumeTailoringService(JobPilotDbContext db, ResumeEvidenceM
 
         var analysis = ResumeTailoringAnalyzer.AnalyzeEvidence(evidenceMap);
         var warnings = ResumeTailoringAnalyzer.BuildWarnings(evidenceMap, analysis);
-        var deterministicDraft = ResumeTailoringAnalyzer.BuildPlainText(profile, baseVersion, target, analysis, layout);
+        var tailoredModel = ResumeTailoringAnalyzer.BuildTailoredModel(profile, baseVersion, target, analysis);
+        var deterministicDraft = ResumeComposer.Render(tailoredModel, layout);
         var aiResult = request.UseAi
             ? await TryGenerateWithAiAsync(userId, profile, baseVersion, target, evidenceMap, analysis, deterministicDraft, layout)
             : null;
         var plainText = ResumeTailoringAnalyzer.SanitizeFinalPlainText(aiResult?.PlainText ?? deterministicDraft, target);
+        // Com texto de IA, as seções estruturadas acompanham o que a IA escreveu.
+        if (aiResult is not null) tailoredModel = ResumeTailoringAnalyzer.ModelFromText(plainText, tailoredModel);
         var status = analysis.Checkpoints.Length > 0 || warnings.Length > 0 ? "needs_review" : "ready";
         var scoreReport = ResumeTailoringAnalyzer.BuildScoreReport(evidenceMap, analysis);
         var score = scoreReport.Score;
@@ -70,7 +73,7 @@ public sealed class ResumeTailoringService(JobPilotDbContext db, ResumeEvidenceM
             CreatedAt = now,
             UpdatedAt = now
         };
-        tailored.Sections.AddRange(ResumeTailoringAnalyzer.BuildSections(userId, tailored.Id, profile, target, analysis, plainText));
+        tailored.Sections.AddRange(ResumeTailoringAnalyzer.BuildSections(userId, tailored.Id, profile, target, analysis, tailoredModel, plainText));
         var sectionDiffs = ResumeTailoringAnalyzer.BuildSectionDiffs(baseVersion, tailored);
         tailored.AtsReportJson = JsonSerializer.Serialize(new
         {
@@ -282,7 +285,10 @@ public sealed class ResumeTailoringService(JobPilotDbContext db, ResumeEvidenceM
                 analysis.Checkpoints));
             if (response is null) return null;
 
-            var validationWarnings = ResumeTailoringAnalyzer.ValidateAiDraft(response.PlainText, analysis);
+            var validationWarnings = ResumeTailoringAnalyzer.ValidateAiDraft(
+                response.PlainText,
+                analysis,
+                string.Join("\n", baseVersion.PlainText, string.Join(", ", profile?.Skills ?? []), profile?.ProfessionalSummary ?? ""));
             if (validationWarnings.Any(x => x.StartsWith("IA rejeitada:", StringComparison.OrdinalIgnoreCase)))
                 return null;
 

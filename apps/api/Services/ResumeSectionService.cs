@@ -45,7 +45,7 @@ public sealed class ResumeSectionService(
 
         sections.Add(section);
         currentSections.Add(section);
-        RebuildPlainText(version, currentSections);
+        RebuildPlainText(version, currentSections, section);
         await unitOfWork.SaveChangesAsync();
 
         return new ResumeSectionDto(section.Id, section.SectionType, section.Title, section.SortOrder, section.ContentJson);
@@ -66,7 +66,7 @@ public sealed class ResumeSectionService(
             section.SortOrder = order;
 
         if (section.Version is not null)
-            RebuildPlainText(section.Version, await LoadSectionsAsync(section.Version));
+            RebuildPlainText(section.Version, await LoadSectionsAsync(section.Version), section);
 
         await unitOfWork.SaveChangesAsync();
 
@@ -143,22 +143,61 @@ public sealed class ResumeSectionService(
             .Where(x => x.UserId == version.UserId && x.ResumeVersionId == version.Id)
             .ToListAsync();
 
-    private static void RebuildPlainText(ResumeVersion version, IReadOnlyCollection<ResumeSection> currentSections)
+    /// <summary>
+    /// Recompõe o texto da versão. Edição direta do texto final vira o texto da versão; edição de uma
+    /// seção estruturada regenera o texto a partir das seções (sem metadados da vaga nem duplicatas).
+    /// </summary>
+    private static void RebuildPlainText(ResumeVersion version, IReadOnlyCollection<ResumeSection> currentSections, ResumeSection? changed = null)
+    {
+        var finalText = currentSections.FirstOrDefault(x => x.SectionType == "plain_text");
+        var structured = ResumeComposer.HasStructuredContent(currentSections);
+
+        if (changed is { SectionType: "plain_text" })
+        {
+            version.PlainText = ExtractTextFromJson(changed.ContentJson).Trim();
+        }
+        else if (structured)
+        {
+            var rendered = ResumeComposer.RenderSections(currentSections, LayoutOf(version));
+            version.PlainText = rendered;
+            if (finalText is not null)
+                finalText.ContentJson = JsonSerializer.Serialize(new { text = rendered }, JsonOptions);
+        }
+        else
+        {
+            version.PlainText = FlatText(currentSections);
+        }
+
+        version.UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    private static string FlatText(IReadOnlyCollection<ResumeSection> currentSections)
     {
         var parts = new List<string>();
         foreach (var section in currentSections.OrderBy(x => x.SortOrder))
         {
             var text = ExtractTextFromJson(section.ContentJson);
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                parts.Add(section.Title.ToUpperInvariant());
-                parts.Add(text);
-                parts.Add("");
-            }
+            if (string.IsNullOrWhiteSpace(text)) continue;
+            parts.Add(section.Title.ToUpperInvariant());
+            parts.Add(text);
+            parts.Add("");
         }
+        return string.Join("\n", parts).Trim();
+    }
 
-        version.PlainText = string.Join("\n", parts).Trim();
-        version.UpdatedAt = DateTimeOffset.UtcNow;
+    private static string LayoutOf(ResumeVersion version)
+    {
+        try
+        {
+            using var report = JsonDocument.Parse(string.IsNullOrWhiteSpace(version.AtsReportJson) ? "{}" : version.AtsReportJson);
+            return report.RootElement.ValueKind == JsonValueKind.Object && report.RootElement.TryGetProperty("layout", out var layout)
+                ? ResumeTextSanitizer.NormalizeLayout(layout.GetString() ?? "")
+                : "ats_standard";
+        }
+        catch (JsonException)
+        {
+            return "ats_standard";
+        }
     }
 
     private static string ExtractTextFromJson(string json)

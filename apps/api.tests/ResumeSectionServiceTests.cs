@@ -51,7 +51,7 @@ public class ResumeSectionServiceTests
         db.ChangeTracker.Clear();
         var saved = await db.ResumeVersions.SingleAsync(x => x.Id == version.Id);
 
-        Assert.True(saved.PlainText.IndexOf("COMPETENCIAS", StringComparison.Ordinal) < saved.PlainText.IndexOf("RESUMO", StringComparison.Ordinal));
+        Assert.True(saved.PlainText.IndexOf("COMPETÊNCIAS", StringComparison.Ordinal) < saved.PlainText.IndexOf("RESUMO", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public class ResumeSectionServiceTests
 
         var version = await db.ResumeVersions.FindAsync(versionId);
         Assert.NotNull(version);
-        Assert.Contains("EXPERIENCIA", version.PlainText);
+        Assert.Contains("EXPERIÊNCIA", version.PlainText);
     }
 
     [Fact]
@@ -167,8 +167,8 @@ public class ResumeSectionServiceTests
         Assert.Equal([10, 20, 30], reordered.Select(x => x.SortOrder).ToArray());
 
         var version = await db.ResumeVersions.SingleAsync(x => x.Id == versionId);
-        Assert.True(version.PlainText.IndexOf("EXPERIENCIA", StringComparison.Ordinal) < version.PlainText.IndexOf("RESUMO", StringComparison.Ordinal));
-        Assert.True(version.PlainText.IndexOf("RESUMO", StringComparison.Ordinal) < version.PlainText.IndexOf("COMPETENCIAS", StringComparison.Ordinal));
+        Assert.True(version.PlainText.IndexOf("EXPERIÊNCIA", StringComparison.Ordinal) < version.PlainText.IndexOf("RESUMO", StringComparison.Ordinal));
+        Assert.True(version.PlainText.IndexOf("RESUMO", StringComparison.Ordinal) < version.PlainText.IndexOf("COMPETÊNCIAS", StringComparison.Ordinal));
     }
 
     [Fact]

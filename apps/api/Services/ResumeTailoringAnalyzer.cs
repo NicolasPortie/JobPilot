@@ -1,5 +1,5 @@
+using System.Globalization;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using JobPilot.Api.Application.Contracts;
 using JobPilot.Api.Domain;
@@ -8,9 +8,11 @@ namespace JobPilot.Api.Services;
 
 internal static partial class ResumeTailoringAnalyzer
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
-    public static string[] ValidateAiDraft(string plainText, TailoringAnalysis analysis)
+    /// <summary>
+    /// Rejeita texto de IA que afirme requisito sem evidência ou cite tecnologia que não está
+    /// no currículo base, no perfil nem na evidência mapeada.
+    /// </summary>
+    public static string[] ValidateAiDraft(string plainText, TailoringAnalysis analysis, string evidenceText = "")
     {
         var warnings = new List<string>();
         if (string.IsNullOrWhiteSpace(plainText) || plainText.Length < 120)
@@ -32,7 +34,26 @@ internal static partial class ResumeTailoringAnalyzer
                 warnings.Add($"IA incluiu evidencia adjacente; revise redacao de: {adjacent}.");
         }
 
+        if (!string.IsNullOrWhiteSpace(evidenceText))
+        {
+            var allowed = TechnologiesIn(evidenceText);
+            allowed.UnionWith(analysis.IncludedKeywords);
+            allowed.UnionWith(analysis.AdjacentKeywords);
+            foreach (var tech in TechnologiesIn(factualText).Where(tech => !allowed.Contains(tech)).Take(5))
+                warnings.Add($"IA rejeitada: tecnologia sem evidência no currículo: {tech}.");
+        }
+
         return warnings.ToArray();
+    }
+
+    /// <summary>Tecnologias conhecidas citadas no texto (comparação sem acentos).</summary>
+    public static HashSet<string> TechnologiesIn(string text)
+    {
+        var normalized = JobTargetTextRules.RemoveDiacritics(text ?? "");
+        var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var match in JobTargetAnalyzer.MatchTechnologies(normalized))
+            found.Add(match.Tech);
+        return found;
     }
 
     public static TailoringAnalysis AnalyzeEvidence(ResumeEvidenceMapDetail map)
@@ -87,29 +108,116 @@ internal static partial class ResumeTailoringAnalyzer
         return warnings.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
-    public static string BuildPlainText(CandidateProfile? profile, ResumeVersion baseVersion, JobTarget target, TailoringAnalysis analysis, string layout)
+    // ───────────────────────── currículo adaptado ─────────────────────────
+
+    /// <summary>
+    /// Currículo da vaga a partir da versão base: mesmo conteúdo, com título alinhado à vaga,
+    /// competências comprovadas da vaga primeiro e bullets/projetos mais relevantes antes.
+    /// Nenhuma frase nova é escrita; nada que não esteja na base entra.
+    /// </summary>
+    public static ResumeModel BuildTailoredModel(CandidateProfile? profile, ResumeVersion baseVersion, JobTarget target, TailoringAnalysis analysis)
     {
-        var sb = new StringBuilder();
-        var identity = ResumeTextSanitizer.SectionObject(baseVersion.Sections, "identity");
-        var fullName = ResumeTextSanitizer.FirstNonEmpty(profile?.FullName, ResumeTextSanitizer.JsonValue(identity, "fullName"), ResumeTextSanitizer.JsonValue(identity, "FullName"), "Nome completo nao informado");
-        ResumeTextSanitizer.Append(sb, fullName);
-        ResumeTextSanitizer.Append(sb, BuildProfessionalHeadline(profile, baseVersion, target));
-        ResumeTextSanitizer.Append(sb, ResumeTextSanitizer.BuildContactLine(profile, identity, baseVersion.PlainText));
-        ResumeTextSanitizer.Append(sb, ResumeTextSanitizer.JoinUniqueNonEmpty(" | ",
-            profile?.LinkedinUrl, ResumeTextSanitizer.JsonValue(identity, "linkedinUrl"), ResumeTextSanitizer.JsonValue(identity, "LinkedinUrl"),
-            profile?.GithubUrl, ResumeTextSanitizer.JsonValue(identity, "githubUrl"), ResumeTextSanitizer.JsonValue(identity, "GithubUrl"),
-            profile?.PortfolioUrl, ResumeTextSanitizer.JsonValue(identity, "portfolioUrl"), ResumeTextSanitizer.JsonValue(identity, "PortfolioUrl")));
-        ResumeTextSanitizer.Blank(sb);
-
-        ResumeTextSanitizer.Section(sb, "RESUMO PROFISSIONAL", BuildSummary(profile, target, analysis, identity));
-
-        var skills = BuildPrioritizedSkills(profile, baseVersion, analysis);
-        if (skills.Length > 0) ResumeTextSanitizer.Section(sb, "COMPETENCIAS", string.Join(", ", skills));
-
-        AppendStructuredBaseHistory(sb, baseVersion, layout);
-
-        return ResumeTextSanitizer.ApplyPortugueseAccents(sb.ToString()).Trim();
+        var model = ResumeComposer.FromVersion(profile, baseVersion);
+        var relevance = new RelevanceMatcher(analysis.IncludedKeywords.Concat(analysis.AdjacentKeywords));
+        return model with
+        {
+            Headline = ResumeTextSanitizer.FirstNonEmpty(CleanTargetRole(target), model.Headline),
+            Skills = BuildPrioritizedSkills(model.Skills, target, analysis),
+            Experience = model.Experience.Select(item => WithBulletsByRelevance(item, relevance)).ToList(),
+            Projects = model.Projects
+                .Select((item, index) => (item, index, score: relevance.Score(ItemText(item))))
+                .OrderByDescending(x => x.score)
+                .ThenBy(x => x.index)
+                .Select(x => WithBulletsByRelevance(x.item, relevance))
+                .ToList()
+        };
     }
+
+    public static string BuildPlainText(CandidateProfile? profile, ResumeVersion baseVersion, JobTarget target, TailoringAnalysis analysis, string layout) =>
+        ResumeComposer.Render(BuildTailoredModel(profile, baseVersion, target, analysis), layout);
+
+    /// <summary>Lê de volta um texto (ex.: gerado por IA) para manter as seções estruturadas coerentes com ele.</summary>
+    public static ResumeModel ModelFromText(string plainText, ResumeModel fallback)
+    {
+        var parsed = ResumeStructureParser.Parse(plainText);
+        if (!parsed.HasStructure) return fallback;
+        return fallback with
+        {
+            Headline = ResumeTextSanitizer.FirstNonEmpty(parsed.Headline, fallback.Headline),
+            Summary = ResumeTextSanitizer.FirstNonEmpty(parsed.Summary, fallback.Summary),
+            Skills = parsed.Skills.Length > 0 ? parsed.Skills : fallback.Skills,
+            Experience = parsed.Experience.Count > 0 ? parsed.Experience : fallback.Experience,
+            Projects = parsed.Projects.Count > 0 ? parsed.Projects : fallback.Projects,
+            Education = parsed.Education.Count > 0 ? parsed.Education : fallback.Education,
+            Certifications = parsed.Certifications.Count > 0 ? parsed.Certifications : fallback.Certifications,
+            Languages = parsed.Languages.Count > 0 ? parsed.Languages : fallback.Languages
+        };
+    }
+
+    private static string[] BuildPrioritizedSkills(string[] baseSkills, JobTarget target, TailoringAnalysis analysis)
+    {
+        var proven = new HashSet<string>(analysis.IncludedKeywords, StringComparer.OrdinalIgnoreCase);
+        var excluded = new HashSet<string>(ResumeTextSanitizer.NormalizeSkillList(analysis.ExcludedKeywords).Select(SkillKey));
+
+        // Termos que a vaga pede e o candidato comprova, na ordem de importância da vaga.
+        var wanted = target.Requirements
+            .Where(requirement => proven.Contains(requirement.Label))
+            .OrderBy(requirement => ImportanceRank(requirement.Importance))
+            .ThenBy(requirement => requirement.SortOrder)
+            .Select(requirement => requirement.Label);
+
+        var ordered = new List<string>();
+        var seen = new HashSet<string>();
+        foreach (var skill in wanted.Concat(baseSkills))
+        {
+            var key = SkillKey(skill);
+            if (key.Length == 0 || excluded.Contains(key) || !seen.Add(key)) continue;
+            ordered.Add(skill);
+        }
+        return ordered.Take(36).ToArray();
+    }
+
+    private static int ImportanceRank(string importance) => importance switch { "must_have" => 0, "nice_to_have" => 1, _ => 2 };
+
+    private static string SkillKey(string value) => Regex.Replace(JobTargetTextRules.RemoveDiacritics(value ?? "").ToLowerInvariant(), @"[^a-z0-9#+.]", "");
+
+    private static Dictionary<string, string> WithBulletsByRelevance(Dictionary<string, string> item, RelevanceMatcher relevance)
+    {
+        var description = ResumeTextSanitizer.Value(item, "description");
+        if (string.IsNullOrWhiteSpace(description)) return item;
+        var bullets = description.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (bullets.Length < 2) return item;
+        var sorted = bullets
+            .Select((bullet, index) => (bullet, index, score: relevance.Score(bullet)))
+            .OrderByDescending(x => x.score)
+            .ThenBy(x => x.index)
+            .Select(x => x.bullet);
+        return new Dictionary<string, string>(item, StringComparer.OrdinalIgnoreCase) { ["description"] = string.Join("\n", sorted) };
+    }
+
+    private static string ItemText(Dictionary<string, string> item) => string.Join(" ", item.Values);
+
+    /// <summary>Conta quantos termos comprovados/relacionados da vaga aparecem em um trecho.</summary>
+    private sealed class RelevanceMatcher
+    {
+        private readonly Regex[] _terms;
+
+        public RelevanceMatcher(IEnumerable<string> terms) =>
+            _terms = terms
+                .Where(term => !string.IsNullOrWhiteSpace(term))
+                .Select(term => Regex.Escape(JobTargetTextRules.RemoveDiacritics(term).ToLowerInvariant()))
+                .Distinct()
+                .Select(term => new Regex($@"(?<![a-z0-9#+]){term}(?![a-z0-9#+])", RegexOptions.CultureInvariant))
+                .ToArray();
+
+        public int Score(string text)
+        {
+            var normalized = JobTargetTextRules.RemoveDiacritics(text ?? "").ToLowerInvariant();
+            return _terms.Count(term => term.IsMatch(normalized));
+        }
+    }
+
+    // ───────────────────────── limpeza do texto final ─────────────────────────
 
     public static string SanitizeFinalPlainText(string plainText, JobTarget? target = null)
     {
@@ -149,7 +257,8 @@ internal static partial class ResumeTailoringAnalyzer
     private static bool IsResumeSectionHeading(string line)
     {
         if (string.IsNullOrWhiteSpace(line) || line.Length > 48) return false;
-        return Regex.IsMatch(line, @"(?i)^(RESUMO PROFISSIONAL|COMPETENCIAS|COMPETENCIAS TECNICAS|EXPERIENCIA PROFISSIONAL|PROJETOS|FORMACAO|CERTIFICACOES|IDIOMAS)$");
+        var plain = JobTargetTextRules.RemoveDiacritics(line);
+        return Regex.IsMatch(plain, @"(?i)^(RESUMO PROFISSIONAL|COMPETENCIAS|COMPETENCIAS TECNICAS|EXPERIENCIA PROFISSIONAL|PROJETOS|FORMACAO|CERTIFICACOES|IDIOMAS)$");
     }
 
     public static string CleanTargetRole(JobTarget target)
@@ -176,57 +285,4 @@ internal static partial class ResumeTailoringAnalyzer
         cleaned = Regex.Replace(cleaned, @"\s{2,}", " ").Trim(' ', '-', '|', ',', '/', ':');
         return cleaned;
     }
-
-    private static string BuildProfessionalHeadline(CandidateProfile? profile, ResumeVersion baseVersion, JobTarget target) =>
-        ResumeTextSanitizer.FirstNonEmpty(
-            CleanTargetRole(target),
-            ResumeTextSanitizer.CleanResumeHeadlineTitle(profile?.TargetRole ?? ""),
-            ResumeTextSanitizer.CleanResumeHeadlineTitle(baseVersion.TargetRole),
-            "Profissional de Tecnologia");
-
-    private static string[] BuildPrioritizedSkills(CandidateProfile? profile, ResumeVersion baseVersion, TailoringAnalysis analysis)
-    {
-        var baseSkills = ResumeDraftBuilder.ExtractSkillsFromVersion(profile, baseVersion);
-        var proven = ResumeTextSanitizer.NormalizeSkillList(analysis.IncludedKeywords);
-        var excluded = new HashSet<string>(ResumeTextSanitizer.NormalizeSkillList(analysis.ExcludedKeywords), StringComparer.OrdinalIgnoreCase);
-        var mergedSkills = ResumeTextSanitizer.NormalizeSkillList(proven
-            .Concat(baseSkills)
-            .Where(skill => !excluded.Contains(skill))
-            .Distinct(StringComparer.OrdinalIgnoreCase))
-            .Take(36)
-            .ToArray();
-        return mergedSkills;
-    }
-
-    private static void AppendStructuredBaseHistory(StringBuilder sb, ResumeVersion baseVersion, string layout)
-    {
-        var sections = baseVersion.Sections.OrderBy(x => x.SortOrder).ToList();
-        ResumeDraftBuilder.AppendSectionItems(sb, "EXPERIENCIA PROFISSIONAL", ResumeTextSanitizer.SectionItems(sections, "experience"), layout);
-        ResumeDraftBuilder.AppendSectionItems(sb, "PROJETOS", ResumeTextSanitizer.SectionItems(sections, "projects"), layout);
-        ResumeDraftBuilder.AppendSectionItems(sb, "FORMACAO", ResumeTextSanitizer.SectionItems(sections, "education"), layout);
-        ResumeDraftBuilder.AppendSectionItems(sb, "CERTIFICACOES", ResumeTextSanitizer.SectionItems(sections, "certifications"), layout);
-        ResumeDraftBuilder.AppendSectionItems(sb, "IDIOMAS", ResumeTextSanitizer.SectionItems(sections, "languages"), layout);
-
-        if (sections.Any(x => x.SectionType is "experience" or "projects" or "education" or "certifications" or "languages"))
-            return;
-
-        var basePlainText = baseVersion.PlainText ?? "";
-        var max = layout == "ats_compact" ? 900 : 1400;
-        ResumeTextSanitizer.Section(sb, "EXPERIENCIA PROFISSIONAL", ResumeDraftBuilder.ExtractFallbackSection(
-            basePlainText,
-            ["EXPERIENCIA PROFISSIONAL", "EXPERIÊNCIA PROFISSIONAL", "EXPERIENCIA", "EXPERIÊNCIA", "PROFESSIONAL EXPERIENCE", "WORK EXPERIENCE"],
-            ["PROJETOS", "PROJECTS", "FORMACAO", "FORMAÇÃO", "EDUCACAO", "EDUCAÇÃO", "CERTIFICACOES", "CERTIFICAÇÕES", "IDIOMAS", "LANGUAGES", "COMPETENCIAS", "COMPETÊNCIAS", "SKILLS"],
-            max));
-        ResumeTextSanitizer.Section(sb, "PROJETOS", ResumeDraftBuilder.ExtractFallbackSection(
-            basePlainText,
-            ["PROJETOS", "PROJECTS"],
-            ["EXPERIENCIA", "EXPERIÊNCIA", "PROFESSIONAL EXPERIENCE", "FORMACAO", "FORMAÇÃO", "EDUCACAO", "EDUCAÇÃO", "CERTIFICACOES", "CERTIFICAÇÕES", "IDIOMAS", "LANGUAGES", "COMPETENCIAS", "COMPETÊNCIAS", "SKILLS"],
-            max / 2));
-        ResumeTextSanitizer.Section(sb, "FORMACAO", ResumeDraftBuilder.ExtractFallbackSection(
-            basePlainText,
-            ["FORMACAO E CERTIFICACOES", "FORMAÇÃO E CERTIFICAÇÕES", "FORMACAO", "FORMAÇÃO", "EDUCACAO", "EDUCAÇÃO", "EDUCATION"],
-            ["EXPERIENCIA", "EXPERIÊNCIA", "PROJETOS", "PROJECTS", "IDIOMAS", "LANGUAGES", "COMPETENCIAS", "COMPETÊNCIAS", "SKILLS"],
-            max / 2));
-    }
-
 }

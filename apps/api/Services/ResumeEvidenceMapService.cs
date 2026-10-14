@@ -28,6 +28,24 @@ public sealed class ResumeEvidenceMapService(
         ["orientacao-a-objetos", "oop", "injecao-de-dependencia", "dependency-injection", "c#", "csharp", ".net", "dotnet", "asp.net-core"]
     ];
 
+    // Grafias equivalentes: citar qualquer uma delas no currículo comprova o requisito.
+    private static readonly string[][] Aliases =
+    [
+        ["entity-framework", "entity-framework-core", "ef-core", "efcore"],
+        ["api-rest", "apis-rest", "web-apis-rest", "restful", "rest-api", "rest-apis"],
+        ["postgresql", "postgres"],
+        ["javascript", "js"],
+        ["typescript", "ts"],
+        ["kubernetes", "k8s"],
+        ["node.js", "nodejs", "node"],
+        ["ci-cd", "cicd"],
+        ["testes", "testes-unitarios", "unit-testing", "testes-de-unidade", "unit-tests"],
+        ["sql-server", "mssql", "microsoft-sql-server"],
+        ["asp.net-core", "aspnet-core"],
+        ["github-actions", "gh-actions"],
+        ["ingles", "english"]
+    ];
+
     public async Task<ResumeEvidenceMapDetail> BuildAsync(Guid userId, BuildResumeEvidenceMapRequest request)
     {
         var version = await versions.Query()
@@ -124,7 +142,7 @@ public sealed class ResumeEvidenceMapService(
         {
             Add(entries, "profile.skills", string.Join(", ", profile.Skills));
             Add(entries, "profile.summary", profile.ProfessionalSummary);
-            Add(entries, "profile.target_role", profile.TargetRole);
+            // O cargo desejado é intenção, não experiência: não entra como evidência.
         }
 
         Add(entries, "resume.plain_text", version.PlainText);
@@ -141,14 +159,19 @@ public sealed class ResumeEvidenceMapService(
             entries.Add(new EvidenceEntry(source, text.Trim(), Normalize(text)));
     }
 
-    private static string[] RequirementTerms(JobRequirement requirement) =>
-        (requirement.ExactPhrases ?? [])
+    private static string[] RequirementTerms(JobRequirement requirement)
+    {
+        var terms = (requirement.ExactPhrases ?? [])
             .Concat([requirement.Label, requirement.NormalizedKeyword])
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .Select(NormalizeKeyword)
             .Where(x => x.Length >= 2)
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+            .ToList();
+        foreach (var group in Aliases.Where(group => terms.Any(term => group.Contains(term, StringComparer.OrdinalIgnoreCase))))
+            terms.AddRange(group.Where(alias => !terms.Contains(alias, StringComparer.OrdinalIgnoreCase)));
+        return terms.ToArray();
+    }
 
     private static bool TryFindEvidence(EvidenceCorpus corpus, string term, out EvidenceHit evidence)
     {

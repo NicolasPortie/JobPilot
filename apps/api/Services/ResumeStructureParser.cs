@@ -295,17 +295,22 @@ internal static partial class ResumeStructureParser
                 continue;
             }
 
-            var period = ExtractPeriod(line, out var rest);
+            var period = ExtractPeriod(line, out var before, out var after);
             if (period.Length > 0)
             {
+                // Texto antes do período é o cabeçalho; texto depois (texto corrido) é o primeiro bullet.
+                var header = before.Length > 0 ? before : after;
+                var trailing = before.Length > 0 ? after : "";
+
                 // Período numa linha própria completa o cabeçalho anterior; com texto, abre um novo item.
-                if (rest.Length == 0 && current is { Period.Length: 0, Bullets.Count: 0 })
+                if (header.Length == 0 && current is { Period.Length: 0, Bullets.Count: 0 })
                     current.Period = period;
                 else
                 {
                     current = AddEntry(entries);
                     current.Period = period;
-                    ApplyHeader(current, rest);
+                    ApplyHeader(current, header);
+                    if (trailing.Length > 0) current.Bullets.Add(trailing);
                 }
                 continue;
             }
@@ -351,16 +356,17 @@ internal static partial class ResumeStructureParser
     }
 
     /// <summary>Remove um período ("Abr/2025 - Atual") da linha e devolve-o normalizado.</summary>
-    private static string ExtractPeriod(string line, out string rest)
+    private static string ExtractPeriod(string line, out string before, out string after)
     {
         var match = PeriodRegex().Match(line);
         if (!match.Success)
         {
-            rest = line;
+            before = line;
+            after = "";
             return "";
         }
-        rest = (line[..match.Index] + " " + line[(match.Index + match.Length)..]);
-        rest = Regex.Replace(rest, @"\s{2,}", " ").Trim(' ', '|', '-', '–', '—', ',', ':', '(', ')');
+        before = line[..match.Index].Trim(' ', '|', '-', '–', '—', ',', ':', '(', ')');
+        after = line[(match.Index + match.Length)..].Trim(' ', '|', '-', '–', '—', ',', ':', '(', ')');
         return $"{match.Groups["s"].Value.Trim()} - {match.Groups["e"].Value.Trim()}";
     }
 

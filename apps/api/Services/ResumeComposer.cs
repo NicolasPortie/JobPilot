@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using JobPilot.Api.Domain;
 
 namespace JobPilot.Api.Services;
@@ -20,30 +21,89 @@ internal sealed record ResumeModel(
 
 /// <summary>
 /// Renderiza o texto ATS (uma coluna, títulos em maiúsculas, bullets "- ") a partir de um
-/// <see cref="ResumeModel"/>. Único ponto que decide formato e limites por layout.
+/// <see cref="ResumeModel"/> ou de seções salvas. Único ponto que decide formato e limites por layout.
 /// </summary>
 internal static class ResumeComposer
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    /// <summary>Seções que descrevem a versão, não o candidato: nunca entram no texto do currículo.</summary>
+    private static readonly HashSet<string> NonContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "identity", "target", "checkpoints", "raw_import", "plain_text"
+    };
+
+    private static readonly HashSet<string> StructuredTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "summary", "skills", "experience", "projects", "education", "certifications", "languages"
+    };
+
+    // ───────────────────────── renderização ─────────────────────────
+
     public static string Render(ResumeModel model, string layout)
     {
-        var compact = layout == "ats_compact";
+        var limits = Limits.For(layout);
         var sb = new StringBuilder();
-        ResumeTextSanitizer.Append(sb, model.FullName, "Nome não informado");
-        ResumeTextSanitizer.Append(sb, model.Headline);
-        ResumeTextSanitizer.Append(sb, model.ContactLine);
-        ResumeTextSanitizer.Append(sb, model.LinksLine);
-        sb.AppendLine();
-
-        Section(sb, "RESUMO PROFISSIONAL", ResumeTextSanitizer.LimitText(model.Summary, compact ? 520 : 850));
-        Section(sb, "COMPETÊNCIAS", string.Join(", ", model.Skills.Take(compact ? 24 : 36)));
-        Entries(sb, "EXPERIÊNCIA PROFISSIONAL", model.Experience.Take(compact ? 4 : 7), ExperienceHeading, compact ? 5 : 8);
-        Entries(sb, "PROJETOS", model.Projects.Take(compact ? 2 : 4), ProjectHeading, compact ? 3 : 5);
-        Entries(sb, "FORMAÇÃO", model.Education, EducationHeading, 0);
-        Bullets(sb, "CERTIFICAÇÕES", model.Certifications.Select(CertificationLine));
-        Bullets(sb, "IDIOMAS", model.Languages.Select(LanguageLine));
-
+        AppendHeader(sb, model.FullName, model.Headline, model.ContactLine, model.LinksLine);
+        sb.Append(SummaryBlock(model.Summary, limits));
+        sb.Append(SkillsBlock(model.Skills, limits));
+        sb.Append(ItemsBlock("experience", model.Experience, limits));
+        sb.Append(ItemsBlock("projects", model.Projects, limits));
+        sb.Append(ItemsBlock("education", model.Education, limits));
+        sb.Append(ItemsBlock("certifications", model.Certifications, limits));
+        sb.Append(ItemsBlock("languages", model.Languages, limits));
         return Tidy(sb.ToString());
     }
+
+    /// <summary>
+    /// Renderiza as seções salvas de uma versão na ordem em que estão. Seções de metadados
+    /// (vaga alvo, pendências, texto importado, texto final) ficam de fora.
+    /// </summary>
+    public static string RenderSections(IEnumerable<ResumeSection> sections, string layout)
+    {
+        var ordered = sections.OrderBy(x => x.SortOrder).ToList();
+        var limits = Limits.For(layout);
+        var identity = ResumeTextSanitizer.SectionObject(ordered, "identity");
+        var sb = new StringBuilder();
+        AppendHeader(
+            sb,
+            ResumeTextSanitizer.JsonValue(identity, "fullName"),
+            ResumeTextSanitizer.JsonValue(identity, "headline"),
+            ResumeTextSanitizer.BuildContactLine(null, identity),
+            ResumeTextSanitizer.JoinUniqueNonEmpty(" | ",
+                ResumeTextSanitizer.JsonValue(identity, "linkedinUrl"),
+                ResumeTextSanitizer.JsonValue(identity, "githubUrl"),
+                ResumeTextSanitizer.JsonValue(identity, "portfolioUrl")));
+
+        var bodyStart = sb.Length;
+        foreach (var section in ordered)
+        {
+            if (NonContentTypes.Contains(section.SectionType)) continue;
+            switch (section.SectionType.ToLowerInvariant())
+            {
+                case "summary":
+                    sb.Append(SummaryBlock(ResumeTextSanitizer.SectionText([section], "summary"), limits));
+                    break;
+                case "skills":
+                    sb.Append(SkillsBlock(SkillItems(section), limits));
+                    break;
+                case "experience" or "projects" or "education" or "certifications" or "languages":
+                    sb.Append(ItemsBlock(section.SectionType.ToLowerInvariant(), ResumeTextSanitizer.SectionItems([section], section.SectionType), limits));
+                    break;
+                default:
+                    var text = ResumeTailoringAnalyzer.ExtractTextFromJson(section.ContentJson);
+                    sb.Append(Block(string.IsNullOrWhiteSpace(section.Title) ? section.SectionType.ToUpperInvariant() : section.Title.ToUpperInvariant(), text));
+                    break;
+            }
+        }
+        return sb.Length == bodyStart ? "" : Tidy(sb.ToString());
+    }
+
+    /// <summary>True quando há seções de conteúdo estruturado para recompor o texto.</summary>
+    public static bool HasStructuredContent(IEnumerable<ResumeSection> sections) =>
+        sections.Any(x => StructuredTypes.Contains(x.SectionType));
+
+    // ───────────────────────── modelo ↔ versão ─────────────────────────
 
     public static ResumeModel FromParsed(ParsedResume parsed, string summary, string[] skills, string contactLine, string linksLine, string fullName) =>
         new(fullName, parsed.Headline, contactLine, linksLine, summary, skills,
@@ -55,36 +115,128 @@ internal static class ResumeComposer
         var sections = version.Sections.OrderBy(x => x.SortOrder).ToList();
         var identity = ResumeTextSanitizer.SectionObject(sections, "identity");
         var fullName = ResumeTextSanitizer.FirstNonEmpty(profile?.FullName, ResumeTextSanitizer.JsonValue(identity, "fullName"));
-        var skills = ResumeDraftBuilder.ExtractSkillsFromVersion(profile, version);
-        var headline = ResumeTextSanitizer.JsonValue(identity, "headline");
         var summary = ResumeTextSanitizer.SectionText(sections, "summary");
         if (string.IsNullOrWhiteSpace(summary)) summary = profile?.ProfessionalSummary ?? "";
+        if (ResumeProfileInference.IsPollutedSummary(summary))
+            summary = ResumeTextSanitizer.CleanSummaryText(summary, profile, identity);
+
+        var experience = ResumeTextSanitizer.SectionItems(sections, "experience");
+        var projects = ResumeTextSanitizer.SectionItems(sections, "projects");
+        var education = ResumeTextSanitizer.SectionItems(sections, "education");
+        var certifications = ResumeTextSanitizer.SectionItems(sections, "certifications");
+        var languages = ResumeTextSanitizer.SectionItems(sections, "languages");
+
+        // Bases importadas antes do parser estruturado só têm o histórico no texto corrido.
+        if (experience.Count + projects.Count + education.Count + certifications.Count + languages.Count == 0 &&
+            !string.IsNullOrWhiteSpace(version.PlainText))
+        {
+            var legacy = ResumeStructureParser.Parse(version.PlainText);
+            (experience, projects, education, certifications, languages) =
+                (legacy.Experience, legacy.Projects, legacy.Education, legacy.Certifications, legacy.Languages);
+        }
 
         return new ResumeModel(
-            fullName, headline,
+            fullName,
+            ResumeTextSanitizer.JsonValue(identity, "headline"),
             ResumeTextSanitizer.BuildContactLine(profile, identity),
             ResumeTextSanitizer.JoinUniqueNonEmpty(" | ",
                 profile?.LinkedinUrl, ResumeTextSanitizer.JsonValue(identity, "linkedinUrl"),
                 profile?.GithubUrl, ResumeTextSanitizer.JsonValue(identity, "githubUrl"),
                 profile?.PortfolioUrl, ResumeTextSanitizer.JsonValue(identity, "portfolioUrl")),
-            summary, skills,
-            ResumeTextSanitizer.SectionItems(sections, "experience"),
-            ResumeTextSanitizer.SectionItems(sections, "projects"),
-            ResumeTextSanitizer.SectionItems(sections, "education"),
-            ResumeTextSanitizer.SectionItems(sections, "certifications"),
-            ResumeTextSanitizer.SectionItems(sections, "languages"));
+            summary,
+            ResumeDraftBuilder.ExtractSkillsFromVersion(profile, version),
+            experience, projects, education, certifications, languages);
+    }
+
+    /// <summary>Seções salvas equivalentes a um modelo (identidade, resumo, competências e itens).</summary>
+    public static List<ResumeSection> ToSections(Guid userId, Guid versionId, CandidateProfile? profile, ResumeModel model)
+    {
+        var sections = new List<ResumeSection>();
+        Add(sections, userId, versionId, "identity", "Identidade", 10, new
+        {
+            fullName = ResumeTextSanitizer.FirstNonEmpty(model.FullName, profile?.FullName),
+            email = profile?.Email ?? "",
+            phone = profile?.Phone ?? "",
+            city = profile?.City ?? "",
+            state = profile?.State ?? "",
+            country = profile?.Country ?? "",
+            linkedinUrl = profile?.LinkedinUrl ?? "",
+            githubUrl = profile?.GithubUrl ?? "",
+            portfolioUrl = profile?.PortfolioUrl ?? "",
+            headline = model.Headline
+        });
+        if (!string.IsNullOrWhiteSpace(model.Summary)) Add(sections, userId, versionId, "summary", "Resumo", 20, new { text = model.Summary });
+        if (model.Skills.Length > 0) Add(sections, userId, versionId, "skills", "Competencias", 30, new { items = model.Skills });
+        AddItems(sections, userId, versionId, "experience", "Experiencia", 40, model.Experience);
+        AddItems(sections, userId, versionId, "projects", "Projetos", 50, model.Projects);
+        AddItems(sections, userId, versionId, "education", "Educacao", 60, model.Education);
+        AddItems(sections, userId, versionId, "certifications", "Certificacoes", 70, model.Certifications);
+        AddItems(sections, userId, versionId, "languages", "Idiomas", 75, model.Languages);
+        return sections;
+    }
+
+    public static void Add(List<ResumeSection> sections, Guid userId, Guid versionId, string type, string title, int order, object content) =>
+        sections.Add(new ResumeSection
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            ResumeVersionId = versionId,
+            SectionType = type,
+            Title = title,
+            SortOrder = order,
+            ContentJson = JsonSerializer.Serialize(content, JsonOptions)
+        });
+
+    private static void AddItems(List<ResumeSection> sections, Guid userId, Guid versionId, string type, string title, int order, List<Dictionary<string, string>> items)
+    {
+        if (items.Count > 0) Add(sections, userId, versionId, type, title, order, new { items });
     }
 
     // ───────────────────────── blocos ─────────────────────────
 
-    private static void Section(StringBuilder sb, string title, string content)
+    private sealed record Limits(int Summary, int Skills, int Experience, int Projects, int ExperienceBullets, int ProjectBullets)
     {
-        if (string.IsNullOrWhiteSpace(content)) return;
-        sb.AppendLine(title).AppendLine(content.Trim()).AppendLine();
+        public static Limits For(string layout) => layout == "ats_compact"
+            ? new Limits(520, 24, 4, 2, 5, 3)
+            : new Limits(850, 36, 7, 4, 8, 5);
     }
 
-    private static void Entries(StringBuilder sb, string title, IEnumerable<Dictionary<string, string>> items,
-        Func<Dictionary<string, string>, string> heading, int maxBullets)
+    private static void AppendHeader(StringBuilder sb, string fullName, string headline, string contact, string links)
+    {
+        ResumeTextSanitizer.Append(sb, fullName, "Nome não informado");
+        ResumeTextSanitizer.Append(sb, headline);
+        ResumeTextSanitizer.Append(sb, contact);
+        ResumeTextSanitizer.Append(sb, links);
+        sb.AppendLine();
+    }
+
+    private static string SummaryBlock(string summary, Limits limits) =>
+        Block("RESUMO PROFISSIONAL", ResumeTextSanitizer.LimitText(summary ?? "", limits.Summary));
+
+    private static string SkillsBlock(string[] skills, Limits limits) =>
+        Block("COMPETÊNCIAS", string.Join(", ", skills.Take(limits.Skills)));
+
+    private static string ItemsBlock(string type, List<Dictionary<string, string>> items, Limits limits)
+    {
+        switch (type)
+        {
+            case "experience":
+                return Entries("EXPERIÊNCIA PROFISSIONAL", items.Take(limits.Experience), ExperienceHeading, limits.ExperienceBullets);
+            case "projects":
+                return Entries("PROJETOS", items.Take(limits.Projects), ProjectHeading, limits.ProjectBullets);
+            case "education":
+                return Entries("FORMAÇÃO", items, EducationHeading, 0);
+            case "certifications":
+                return Bullets("CERTIFICAÇÕES", items.Select(CertificationLine));
+            default:
+                return Bullets("IDIOMAS", items.Select(LanguageLine));
+        }
+    }
+
+    private static string Block(string title, string content) =>
+        string.IsNullOrWhiteSpace(content) ? "" : $"{title}\n{content.Trim()}\n\n";
+
+    private static string Entries(string title, IEnumerable<Dictionary<string, string>> items, Func<Dictionary<string, string>, string> heading, int maxBullets)
     {
         var blocks = new List<string>();
         foreach (var item in items)
@@ -98,15 +250,25 @@ internal static class ResumeComposer
                 lines.Add($"- {line.TrimStart('-', ' ')}");
             if (lines.Count > 0) blocks.Add(string.Join("\n", lines));
         }
-        if (blocks.Count == 0) return;
-        sb.AppendLine(title).AppendLine(string.Join("\n", blocks)).AppendLine();
+        return Block(title, string.Join("\n", blocks));
     }
 
-    private static void Bullets(StringBuilder sb, string title, IEnumerable<string> lines)
+    private static string Bullets(string title, IEnumerable<string> lines) =>
+        Block(title, string.Join("\n", lines.Where(line => !string.IsNullOrWhiteSpace(line)).Select(line => $"- {line}")));
+
+    private static string[] SkillItems(ResumeSection section)
     {
-        var rendered = lines.Where(line => !string.IsNullOrWhiteSpace(line)).Select(line => $"- {line}").ToArray();
-        if (rendered.Length == 0) return;
-        sb.AppendLine(title).AppendLine(string.Join("\n", rendered)).AppendLine();
+        var root = ResumeTextSanitizer.SectionObject([section], "skills");
+        if (root is null) return [];
+        // Formato antigo de versões adaptadas guardava proven/adjacent/excluded; só o comprovado é currículo.
+        var items = ResumeTextSanitizer.SectionArray([section], "skills", "items");
+        if (items.Length == 0) items = ResumeTextSanitizer.SectionArray([section], "skills", "proven");
+        if (items.Length == 0)
+        {
+            var text = ResumeTextSanitizer.SectionText([section], "skills");
+            items = text.Split([',', ';', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        }
+        return items;
     }
 
     // ───────────────────────── títulos de item ─────────────────────────
@@ -144,7 +306,5 @@ internal static class ResumeComposer
         string.IsNullOrWhiteSpace(period) ? head : string.IsNullOrWhiteSpace(head) ? period : $"{head} | {period}";
 
     private static string Tidy(string text) =>
-        System.Text.RegularExpressions.Regex.Replace(text.Replace("\r\n", "\n"), @"\n{3,}", "\n\n").Trim();
-
-    public static string ToJson(object content) => JsonSerializer.Serialize(content, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Regex.Replace(text.Replace("\r\n", "\n"), @"\n{3,}", "\n\n").Trim();
 }

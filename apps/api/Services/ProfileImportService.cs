@@ -125,6 +125,10 @@ public sealed class ProfileImportService
             .Where(skill => !previousSkills.Contains(skill))
             .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+        var currentSkills = new HashSet<string>(profile.Skills, StringComparer.OrdinalIgnoreCase);
+        var droppedSkills = previousSkills.Where(skill => !currentSkills.Contains(skill)).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray();
+        if (droppedSkills.Length > 0)
+            warnings.Add($"Competências do perfil que o currículo não cita foram removidas: {string.Join(", ", droppedSkills)}. Adicione de volta no Perfil só o que você pode comprovar.");
 
         return new ProfileImportResponse(profile, answers, addedSkills, fetched.Keys.ToArray(), warnings.Distinct().ToArray(), effectiveExtraction.Report, resumeText, importData);
     }
@@ -259,7 +263,8 @@ public sealed class ProfileImportService
              ResumeProfileInference.IsPollutedSummary(profile.ProfessionalSummary) ||
              data.ProfessionalSummary.Length > profile.ProfessionalSummary.Length / 2))
             profile.ProfessionalSummary = data.ProfessionalSummary.Trim();
-        profile.Skills = ResumeProfileInference.MergeSkills(profile.Skills, data.Skills);
+        // O perfil espelha o currículo importado: competências antigas que o arquivo não cita não passam a constar como fato.
+        profile.Skills = ResumeProfileInference.MergeSkills([], data.Skills);
         if (!string.IsNullOrWhiteSpace(resumePath)) profile.ResumePath = resumePath;
         profile.UpdatedAt = DateTimeOffset.UtcNow;
     }

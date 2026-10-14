@@ -50,6 +50,22 @@ internal static class JobTargetAnalyzer
             requirements.Count > 0 ? 0.55m : 0.25m);
     }
 
+    /// <summary>Posições das tecnologias conhecidas em um texto já sem acentos.</summary>
+    internal static List<(string Tech, int Start, int End)> MatchTechnologies(string normalizedText)
+    {
+        var matches = new List<(string Tech, int Start, int End)>();
+        foreach (var tech in KnownTech)
+        {
+            var options = tech.Length <= 3 && tech.All(char.IsLetter) ? RegexOptions.CultureInvariant : RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
+            // "8+" em ".NET 8+" é sufixo de versão; já em "C++" o "+" faz parte do nome.
+            var trailing = char.IsDigit(tech[^1]) ? @"(?![\p{L}\p{N}#])" : @"(?![\p{L}\p{N}#+])";
+            var pattern = $@"(?<![\p{{L}}\p{{N}}#+.]){Regex.Escape(RemoveDiacritics(tech))}{trailing}(?!\.[\p{{L}}\p{{N}}])";
+            foreach (Match match in Regex.Matches(normalizedText, pattern, options))
+                matches.Add((tech, match.Index, match.Index + match.Length));
+        }
+        return matches;
+    }
+
     /// <summary>
     /// Tecnologias citadas na vaga, com a importância vinda da seção em que aparecem.
     /// Termos só presentes em Benefícios são descartados; um termo contido em outro mais
@@ -57,16 +73,9 @@ internal static class JobTargetAnalyzer
     /// </summary>
     private static IEnumerable<(string Tech, string Importance)> FindTechnologies(JobPostingSections sections)
     {
-        var matches = new List<(string Tech, int Start, int End, JobSection Section)>();
-        foreach (var tech in KnownTech)
-        {
-            var options = tech.Length <= 3 && tech.All(char.IsLetter) ? RegexOptions.CultureInvariant : RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
-            // "8+" em ".NET 8+" é sufixo de versão; já em "C++" o "+" faz parte do nome.
-            var trailing = char.IsDigit(tech[^1]) ? @"(?![\p{L}\p{N}#])" : @"(?![\p{L}\p{N}#+])";
-            var pattern = $@"(?<![\p{{L}}\p{{N}}#+.]){Regex.Escape(RemoveDiacritics(tech))}{trailing}(?!\.[\p{{L}}\p{{N}}])";
-            foreach (Match match in Regex.Matches(sections.NormalizedText, pattern, options))
-                matches.Add((tech, match.Index, match.Index + match.Length, sections.SectionAt(match.Index)));
-        }
+        var matches = MatchTechnologies(sections.NormalizedText)
+            .Select(m => (m.Tech, m.Start, m.End, Section: sections.SectionAt(m.Start)))
+            .ToList();
 
         var hasSections = sections.HasHeadings;
         foreach (var group in matches.GroupBy(m => m.Tech, StringComparer.OrdinalIgnoreCase))

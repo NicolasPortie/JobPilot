@@ -14,7 +14,6 @@ internal static class ResumeProfileInference
         var normalized = RemoveDiacritics(corpus).ToLowerInvariant();
         var skills = parsed.Skills
             .Concat(KnownSkills().Where(skill => normalized.Contains(RemoveDiacritics(skill).ToLowerInvariant())))
-            .Concat(profile.Skills)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 

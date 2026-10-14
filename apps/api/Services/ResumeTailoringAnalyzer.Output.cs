@@ -8,23 +8,16 @@ namespace JobPilot.Api.Services;
 
 internal static partial class ResumeTailoringAnalyzer
 {
-    public static List<ResumeSection> BuildSections(Guid userId, Guid versionId, CandidateProfile? profile, JobTarget target, TailoringAnalysis analysis, string plainText)
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    /// <summary>
+    /// Seções da versão adaptada: o próprio conteúdo do currículo (identidade, resumo, competências,
+    /// experiências...) mais metadados da vaga e o texto final. Só o conteúdo vira texto ao editar.
+    /// </summary>
+    public static List<ResumeSection> BuildSections(Guid userId, Guid versionId, CandidateProfile? profile, JobTarget target, TailoringAnalysis analysis, ResumeModel model, string plainText)
     {
-        var sections = new List<ResumeSection>();
-        AddSection(sections, userId, versionId, "identity", "Identidade", 10, new
-        {
-            fullName = profile?.FullName ?? "",
-            email = profile?.Email ?? "",
-            phone = profile?.Phone ?? "",
-            city = profile?.City ?? "",
-            state = profile?.State ?? "",
-            country = profile?.Country ?? "",
-            linkedinUrl = profile?.LinkedinUrl ?? "",
-            githubUrl = profile?.GithubUrl ?? "",
-            portfolioUrl = profile?.PortfolioUrl ?? ""
-        });
-        AddSection(sections, userId, versionId, "target", "Vaga alvo", 20, new { target.Id, target.Title, target.Company, target.Location, target.Seniority, target.Workplace });
-        AddSection(sections, userId, versionId, "skills", "Competencias", 30, new { proven = analysis.IncludedKeywords, adjacent = analysis.AdjacentKeywords, excluded = analysis.ExcludedKeywords });
+        var sections = ResumeComposer.ToSections(userId, versionId, profile, model);
+        AddSection(sections, userId, versionId, "target", "Vaga alvo", 15, new { target.Id, target.Title, target.Company, target.Location, target.Seniority, target.Workplace });
         AddSection(sections, userId, versionId, "checkpoints", "Pendencias", 80, new { items = analysis.Checkpoints });
         AddSection(sections, userId, versionId, "plain_text", "Texto ATS", 90, new { text = plainText });
         return sections;
@@ -238,71 +231,6 @@ internal static partial class ResumeTailoringAnalyzer
             SortOrder = order,
             ContentJson = JsonSerializer.Serialize(content, JsonOptions)
         });
-
-    public static string BuildSummary(CandidateProfile? profile, JobTarget target, TailoringAnalysis analysis, JsonElement? identity)
-    {
-        var targetTitle = CleanTargetRole(target);
-        var targetSpecificTitle = ResumeTextSanitizer.CleanProfessionalTitle(target.Title);
-        var baseSummary = ResumeTextSanitizer.CleanSummaryText(profile?.ProfessionalSummary ?? "", profile, identity);
-        baseSummary = ResumeTextSanitizer.FirstNonEmpty(baseSummary, $"Profissional com foco em {ResumeTextSanitizer.FirstNonEmpty(targetTitle, "tecnologia")}.");
-        var sentences = Regex.Split(baseSummary, @"(?<=[.!?])\s+")
-            .Select(sentence => sentence.Trim())
-            .Where(sentence => !string.IsNullOrWhiteSpace(sentence))
-            .Where(sentence => !ResumeTextSanitizer.LooksLikeSkillListSentence(sentence, analysis.IncludedKeywords))
-            .Take(2)
-            .ToList();
-        if (sentences.Count == 0)
-            sentences.Add($"Profissional com foco em {ResumeTextSanitizer.FirstNonEmpty(targetTitle, profile?.TargetRole, "tecnologia")}, desenvolvimento de software e entrega de soluções para uso real.");
-
-        if (!string.IsNullOrWhiteSpace(targetSpecificTitle) &&
-            !targetSpecificTitle.Equals(targetTitle, StringComparison.OrdinalIgnoreCase) &&
-            !ResumeTextSanitizer.ContainsTerm(string.Join(" ", sentences), targetSpecificTitle))
-        {
-            sentences.Add($"Foco profissional em {targetSpecificTitle}, com experiência baseada nas evidências do currículo.");
-        }
-
-        var focusSentence = BuildTargetFocusSentence(analysis, string.Join(" ", sentences));
-        if (!string.IsNullOrWhiteSpace(focusSentence))
-        {
-            if (sentences.Count > 0)
-                sentences[^1] = EnsureTerminalPunctuation(sentences[^1]);
-            sentences.Add(focusSentence);
-        }
-
-        return string.Join(" ", sentences).Trim();
-    }
-
-    private static string EnsureTerminalPunctuation(string value)
-    {
-        var text = (value ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(text) || Regex.IsMatch(text, @"[.!?]$")) return text;
-        return $"{text}.";
-    }
-
-    private static string BuildTargetFocusSentence(TailoringAnalysis analysis, string currentSummary)
-    {
-        var provenKeywords = ResumeTextSanitizer.NormalizeSkillList(
-                analysis.ProvenEvidence.Select(x => x.Keyword).Concat(analysis.IncludedKeywords))
-            .Where(keyword => !ResumeTextSanitizer.ContainsTerm(currentSummary, keyword))
-            .Take(6)
-            .ToArray();
-
-        if (provenKeywords.Length == 0) return "";
-
-        return $"Experiência comprovada em {NaturalList(provenKeywords)}, aplicada a sistemas corporativos, integrações e evolução de aplicações.";
-    }
-
-    private static string NaturalList(string[] values)
-    {
-        var items = values.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        return items.Length switch
-        {
-            0 => "",
-            1 => items[0],
-            2 => $"{items[0]} e {items[1]}",
-            _ => $"{string.Join(", ", items[..^1])} e {items[^1]}"
-        };
-    }
 
     public static string BuildTitle(JobTarget target)
     {

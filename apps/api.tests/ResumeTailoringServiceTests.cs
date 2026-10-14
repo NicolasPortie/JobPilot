@@ -452,6 +452,169 @@ public class ResumeTailoringServiceTests
         Assert.Contains("Kubernetes", result.ExcludedKeywords);
     }
 
+    private async Task<(JobPilotDbContext Db, Guid UserId, Guid VersionId, Guid TargetId)> SeedTruthScenarioAsync(string summary = "", string targetRole = "")
+    {
+        var db = CreateDb();
+        var userId = Guid.NewGuid();
+        var documentId = Guid.NewGuid();
+        var versionId = Guid.NewGuid();
+        var targetId = Guid.NewGuid();
+
+        db.CandidateProfiles.Add(new CandidateProfile
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            FullName = "Ana Souza",
+            Email = "ana@example.com",
+            Phone = "(11) 98888-7777",
+            City = "Campinas",
+            State = "SP",
+            TargetRole = targetRole,
+            ProfessionalSummary = summary,
+            Skills = []
+        });
+        db.ResumeDocuments.Add(new ResumeDocument { Id = documentId, UserId = userId, Title = "Base", Status = "ready" });
+        db.ResumeVersions.Add(new ResumeVersion
+        {
+            Id = versionId,
+            UserId = userId,
+            ResumeDocumentId = documentId,
+            Title = "Base",
+            PlainText = "Ana Souza",
+            Sections =
+            [
+                Section(userId, versionId, "identity", "Identidade", 10, new { fullName = "Ana Souza", headline = "Analista de Dados" }),
+                Section(userId, versionId, "skills", "Competencias", 30, new { items = new[] { "Excel", "SQL", "Power BI", "Docker" } }),
+                Section(userId, versionId, "experience", "Experiencia", 40, new
+                {
+                    items = new[]
+                    {
+                        new { company = "Acme", role = "Analista", period = "2020 - 2023", description = "Organizou o arquivo morto.\nCriou consultas em SQL para relatórios mensais.\nUsou Docker para publicar o painel de indicadores." }
+                    }
+                }),
+                Section(userId, versionId, "projects", "Projetos", 50, new
+                {
+                    items = new[]
+                    {
+                        new { name = "Horta Comunitária", description = "Calendário de plantio." },
+                        new { name = "Painel de Vendas", description = "Dashboard em Power BI com SQL." }
+                    }
+                })
+            ]
+        });
+        db.JobTargets.Add(new JobTarget
+        {
+            Id = targetId,
+            UserId = userId,
+            Title = "Analista de BI",
+            Company = "Beta",
+            Requirements =
+            [
+                Req(userId, targetId, "technology", "SQL", "must_have", "sql", 1),
+                Req(userId, targetId, "technology", "Docker", "nice_to_have", "docker", 2),
+                Req(userId, targetId, "technology", "Power BI", "must_have", "power-bi", 3),
+                Req(userId, targetId, "technology", "Kubernetes", "must_have", "kubernetes", 4)
+            ]
+        });
+        await db.SaveChangesAsync();
+        return (db, userId, versionId, targetId);
+    }
+
+    [Fact]
+    public async Task TailorAsync_NaoInventaResumoQuandoABaseNaoTem()
+    {
+        var (db, userId, versionId, targetId) = await SeedTruthScenarioAsync(summary: "", targetRole: "Engenheiro Kubernetes");
+        await using var _ = db;
+
+        var service = new ResumeTailoringService(db, TestServices.ResumeEvidenceMapService(db), new FakeAiChatService());
+        var result = await service.TailorAsync(userId, new TailorResumeRequest(versionId, targetId, UseAi: false));
+
+        Assert.DoesNotContain("RESUMO PROFISSIONAL", result.PlainText);
+        AssertDoesNotContainIgnoringDiacritics("sistemas corporativos", result.PlainText);
+        AssertDoesNotContainIgnoringDiacritics("desenvolvimento de software", result.PlainText);
+        // O cargo desejado é intenção: Kubernetes não pode virar competência comprovada.
+        Assert.DoesNotContain("Kubernetes", result.IncludedKeywords);
+        Assert.DoesNotContain("Kubernetes", result.PlainText);
+    }
+
+    [Fact]
+    public async Task TailorAsync_PriorizaCompetenciasEBulletsDaVaga()
+    {
+        var (db, userId, versionId, targetId) = await SeedTruthScenarioAsync();
+        await using var _ = db;
+
+        var service = new ResumeTailoringService(db, TestServices.ResumeEvidenceMapService(db), new FakeAiChatService());
+        var result = await service.TailorAsync(userId, new TailorResumeRequest(versionId, targetId, UseAi: false));
+        var text = result.PlainText;
+
+        var skillsLine = text.Split('\n').Single(line => line.StartsWith("SQL, "));
+        Assert.True(skillsLine.IndexOf("SQL", StringComparison.Ordinal) < skillsLine.IndexOf("Excel", StringComparison.Ordinal));
+        Assert.True(skillsLine.IndexOf("Power BI", StringComparison.Ordinal) < skillsLine.IndexOf("Excel", StringComparison.Ordinal));
+
+        // Bullet com termos da vaga sobe; o irrelevante desce. Projeto relevante vem antes do outro.
+        Assert.True(text.IndexOf("Criou consultas em SQL", StringComparison.Ordinal) < text.IndexOf("Organizou o arquivo morto", StringComparison.Ordinal));
+        Assert.True(text.IndexOf("Painel de Vendas", StringComparison.Ordinal) < text.IndexOf("Horta Comunitária", StringComparison.Ordinal));
+        Assert.Contains("Analista - Acme | 2020 - 2023", text);
+        Assert.DoesNotContain("Kubernetes", text);
+    }
+
+    [Fact]
+    public async Task EditarSecaoDaVersaoAdaptada_RegeneraTextoSemDuplicarNemVazarMetadados()
+    {
+        var (db, userId, versionId, targetId) = await SeedTruthScenarioAsync();
+        await using var _ = db;
+        var service = new ResumeTailoringService(db, TestServices.ResumeEvidenceMapService(db), new FakeAiChatService());
+        var result = await service.TailorAsync(userId, new TailorResumeRequest(versionId, targetId, UseAi: false));
+        var experience = result.Version.Sections.Single(x => x.SectionType == "experience");
+
+        var sections = TestServices.ResumeSectionService(db);
+        await sections.UpdateAsync(userId, experience.Id, new UpdateResumeSectionRequest(
+            ContentJson: "{\"items\":[{\"company\":\"Acme\",\"role\":\"Analista Sênior\",\"period\":\"2020 - 2023\",\"description\":\"Liderou o time de dados.\"}]}"));
+        db.ChangeTracker.Clear();
+        var saved = await db.ResumeVersions.Include(x => x.Sections).SingleAsync(x => x.Id == result.TailoredVersionId);
+
+        Assert.Contains("Analista Sênior - Acme", saved.PlainText);
+        Assert.Contains("Liderou o time de dados.", saved.PlainText);
+        Assert.DoesNotContain("Organizou o arquivo morto", saved.PlainText);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(saved.PlainText, "EXPERIÊNCIA PROFISSIONAL"));
+        Assert.DoesNotContain("Vaga alvo", saved.PlainText);
+        Assert.DoesNotContain("Beta", saved.PlainText);
+        Assert.DoesNotContain("Kubernetes", saved.PlainText);
+        Assert.Equal(saved.PlainText, System.Text.Json.JsonDocument.Parse(saved.Sections.Single(x => x.SectionType == "plain_text").ContentJson).RootElement.GetProperty("text").GetString());
+    }
+
+    [Fact]
+    public async Task TailorAsync_RejeitaTextoDaIaQueCitaTecnologiaForaDoCurriculo()
+    {
+        var (db, userId, versionId, targetId) = await SeedTruthScenarioAsync();
+        await using var _ = db;
+        var invented = new TailoredResumeGenerationResponse(
+            "Ana Souza\nAnalista de BI\n\nRESUMO PROFISSIONAL\nAnalista com experiência em SQL, Power BI e também em Terraform e Ansible para infraestrutura.\n\nCOMPETÊNCIAS\nSQL, Power BI, Terraform, Ansible\n\nEXPERIÊNCIA PROFISSIONAL\nAnalista - Acme | 2020 - 2023\n- Criou consultas em SQL.",
+            []);
+
+        var service = new ResumeTailoringService(db, TestServices.ResumeEvidenceMapService(db), new FakeAiChatService(invented));
+        var result = await service.TailorAsync(userId, new TailorResumeRequest(versionId, targetId, UseAi: true));
+
+        Assert.DoesNotContain("Terraform", result.PlainText);
+        Assert.False(result.UsedAi);
+    }
+
+    [Fact]
+    public async Task TailorAsync_ReconheceApelidoDeTecnologiaComoEvidencia()
+    {
+        var (db, userId, versionId, targetId) = await SeedTruthScenarioAsync();
+        await using var _ = db;
+        db.JobRequirements.Add(Req(userId, targetId, "technology", "Entity Framework Core", "must_have", "entity-framework-core", 9));
+        var skills = db.ResumeSections.Single(x => x.ResumeVersionId == versionId && x.SectionType == "skills");
+        skills.ContentJson = "{\"items\":[\"SQL\",\"EF Core\"]}";
+        await db.SaveChangesAsync();
+
+        var service = new ResumeTailoringService(db, TestServices.ResumeEvidenceMapService(db), new FakeAiChatService());
+        var result = await service.TailorAsync(userId, new TailorResumeRequest(versionId, targetId, UseAi: false));
+
+        Assert.Contains("Entity Framework Core", result.IncludedKeywords);
+    }
+
     private static JobRequirement Req(Guid userId, Guid targetId, string category, string label, string importance, string keyword, int order) =>
         new()
         {

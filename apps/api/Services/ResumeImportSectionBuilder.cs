@@ -14,8 +14,16 @@ internal static class ResumeImportSectionBuilder
         var sections = new List<ResumeSection>();
         AddSection(sections, userId, versionId, "identity", "Identidade", 10, new
         {
-            data.FullName, data.Email, data.Phone, data.City, data.State, data.Country,
-            data.LinkedinUrl, data.GithubUrl, data.PortfolioUrl, headline = parsed.Headline
+            data.FullName,
+            data.Email,
+            data.Phone,
+            data.City,
+            data.State,
+            data.Country,
+            data.LinkedinUrl,
+            data.GithubUrl,
+            data.PortfolioUrl,
+            headline = parsed.Headline
         });
         AddSection(sections, userId, versionId, "summary", "Resumo", 20, new { text = data.ProfessionalSummary });
         AddSection(sections, userId, versionId, "skills", "Competencias", 30, new { items = data.Skills });

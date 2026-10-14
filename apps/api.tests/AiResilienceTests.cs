@@ -5,8 +5,8 @@ using JobPilot.Api.Domain;
 using JobPilot.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace JobPilot.Api.Tests;
 
@@ -144,9 +144,18 @@ public sealed class AiResilienceTests
             ["Ai:Provider"] = "anthropic",
             ["Ai:ApiKey"] = "generic-test-key"
         }).Build();
-        db.AiProviders.Add(new AiProvider { Id = Guid.NewGuid(), UserId = userId, Name = "Saved",
-            ProviderType = "anthropic", BaseUrl = "https://api.anthropic.com", Model = "saved-model",
-            IsActive = true, IsDefault = true, EncryptedApiKey = SecretProtector.Protect("saved-test-key", config) });
+        db.AiProviders.Add(new AiProvider
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Name = "Saved",
+            ProviderType = "anthropic",
+            BaseUrl = "https://api.anthropic.com",
+            Model = "saved-model",
+            IsActive = true,
+            IsDefault = true,
+            EncryptedApiKey = SecretProtector.Protect("saved-test-key", config)
+        });
         await db.SaveChangesAsync();
         var service = new AiCompletionService(new HttpClient(), config, db, NullLogger<AiCompletionService>.Instance, new TraceRedactionService());
         var resolved = await service.ResolveProviderAsync(userId);
@@ -164,12 +173,19 @@ public sealed class AiResilienceTests
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Security:SecretKey"] = "test-secret-key-with-more-than-thirty-two-characters",
-            ["KIMI_API_KEY"] = "", ["LocalLlm:Enabled"] = "false"
+            ["KIMI_API_KEY"] = "",
+            ["LocalLlm:Enabled"] = "false"
         }).Build();
         var oldConfig = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         { ["Security:SecretKey"] = "old-secret-with-more-than-thirty-two-characters" }).Build();
-        db.AiProviders.Add(new AiProvider { Id = Guid.NewGuid(), UserId = userId, Name = "Unreadable",
-            IsActive = true, EncryptedApiKey = malformed ? "enc:not-valid-ciphertext" : SecretProtector.Protect("old-test-key", oldConfig) });
+        db.AiProviders.Add(new AiProvider
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Name = "Unreadable",
+            IsActive = true,
+            EncryptedApiKey = malformed ? "enc:not-valid-ciphertext" : SecretProtector.Protect("old-test-key", oldConfig)
+        });
         await db.SaveChangesAsync();
         var logger = new CapturingLogger();
         var service = new AiCompletionService(new HttpClient(), config, db, logger, new TraceRedactionService());

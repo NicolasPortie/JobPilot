@@ -164,7 +164,9 @@ if ($trackedGenerated) {
 }
 
 $rootTemporaryFiles = Get-ChildItem -LiteralPath $root -File |
-  Where-Object { $_.Name -match '\.(log|tmp|dump)$|^codex_.*\.json$|^debug-filter\.cs$|^dashboard-qa\.png$|^tmp-.*\.png$' }
+  Where-Object { $_.Name -match '\.(log|tmp|dump)$|^codex_.*\.json$|^debug-filter\.cs$|^dashboard-qa\.png$|^tmp-.*\.png$' } |
+  # Arquivos que o Git já ignora (ex.: log de outra ferramenta aberta na raiz) não entram no repositório.
+  Where-Object { git -C $root check-ignore -q -- $_.Name; $LASTEXITCODE -ne 0 }
 if ($rootTemporaryFiles) {
   $violations.Add("Temporary files must not live in the repository root:`n$rootTemporaryFiles")
 }

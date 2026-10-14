@@ -6,6 +6,7 @@ using JobPilot.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace JobPilot.Api.Tests;
 
@@ -83,6 +84,7 @@ public sealed class AiResilienceTests
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Security:SecretKey"] = "new-secret-new-secret-new-secret-0002",
+            ["KIMI_API_KEY"] = "",
             ["Ai:Provider"] = "anthropic",
             ["Ai:ApiKey"] = "sk-configured"
         }).Build();
@@ -102,11 +104,12 @@ public sealed class AiResilienceTests
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Security:SecretKey"] = "new-secret-new-secret-new-secret-0002",
+            ["KIMI_API_KEY"] = "",
             ["Ai:Provider"] = "anthropic",
             ["Ai:ApiKey"] = "sk-configured"
         }).Build();
         var health = new AiHealthTracker();
-        var handler = new StaticHandler(HttpStatusCode.Forbidden, "{\"error\":{\"message\":\"plan has no access\"}}");
+        var handler = new StaticHandler(HttpStatusCode.Forbidden, "{\"error\":{\"message\":\"plan has no access sk-leaked-secret\"}}");
         var service = new AiCompletionService(new HttpClient(handler), configuration, db, NullLogger<AiCompletionService>.Instance, new TraceRedactionService(), health);
         var userId = Guid.NewGuid();
 
@@ -116,8 +119,87 @@ public sealed class AiResilienceTests
         Assert.Null(text);
         Assert.False(status.Available);
         Assert.True(status.Configured);
-        Assert.Contains("plan has no access", status.Message);
+        Assert.Contains("HTTP 403", status.Message);
+        Assert.DoesNotContain("plan has no access", status.Message);
+        Assert.DoesNotContain("sk-leaked-secret", status.Message);
+        var other = await service.GetStatusAsync(Guid.NewGuid());
+        Assert.True(other.Available);
+        Assert.Null(other.LastCallSucceeded);
+        Assert.Null(other.LastCheckedAt);
         Assert.Equal(1, handler.Calls);
+    }
+
+    [Theory]
+    [InlineData("Kimi:ApiKey")]
+    [InlineData("KIMI_API_KEY")]
+    public async Task LocalKimiKey_TakesPrecedenceOverReadableSavedAndGenericKey(string keySetting)
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Security:SecretKey"] = "test-secret-key-with-more-than-thirty-two-characters",
+            ["KIMI_API_KEY"] = "",
+            [keySetting] = "local-test-key",
+            ["Ai:Provider"] = "anthropic",
+            ["Ai:ApiKey"] = "generic-test-key"
+        }).Build();
+        db.AiProviders.Add(new AiProvider { Id = Guid.NewGuid(), UserId = userId, Name = "Saved",
+            ProviderType = "anthropic", BaseUrl = "https://api.anthropic.com", Model = "saved-model",
+            IsActive = true, IsDefault = true, EncryptedApiKey = SecretProtector.Protect("saved-test-key", config) });
+        await db.SaveChangesAsync();
+        var service = new AiCompletionService(new HttpClient(), config, db, NullLogger<AiCompletionService>.Instance, new TraceRedactionService());
+        var resolved = await service.ResolveProviderAsync(userId);
+        Assert.Equal("kimi", resolved.ProviderType);
+        Assert.Equal("local-test-key", SecretProtector.Unprotect(resolved.EncryptedApiKey, config));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UnreadableSavedKey_IsSkipped_WithoutLocalConfiguration(bool malformed)
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Security:SecretKey"] = "test-secret-key-with-more-than-thirty-two-characters",
+            ["KIMI_API_KEY"] = "", ["LocalLlm:Enabled"] = "false"
+        }).Build();
+        var oldConfig = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        { ["Security:SecretKey"] = "old-secret-with-more-than-thirty-two-characters" }).Build();
+        db.AiProviders.Add(new AiProvider { Id = Guid.NewGuid(), UserId = userId, Name = "Unreadable",
+            IsActive = true, EncryptedApiKey = malformed ? "enc:not-valid-ciphertext" : SecretProtector.Protect("old-test-key", oldConfig) });
+        await db.SaveChangesAsync();
+        var logger = new CapturingLogger();
+        var service = new AiCompletionService(new HttpClient(), config, db, logger, new TraceRedactionService());
+        var status = await service.GetStatusAsync(userId);
+        Assert.False(status.Configured);
+        Assert.False(status.Available);
+        Assert.Null(await service.CompleteTextAsync(userId, "test", "system", "prompt"));
+        Assert.Contains(logger.Messages, message => message.Contains("ignored"));
+        Assert.DoesNotContain(logger.Messages, message => message.Contains("old-test-key"));
+    }
+
+    [Fact]
+    public async Task AnthropicRequest_HasEnoughTokens_AndTracksSuccessAndConfigurationChange()
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Security:SecretKey"] = "test-secret-key-with-more-than-thirty-two-characters",
+            ["Kimi:ApiKey"] = "test-key"
+        }).Build();
+        var handler = new StaticHandler(HttpStatusCode.OK, "{\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}");
+        var service = new AiCompletionService(new HttpClient(handler), config, db, NullLogger<AiCompletionService>.Instance, new TraceRedactionService(), new AiHealthTracker());
+        Assert.Null((await service.GetStatusAsync(userId)).LastCallSucceeded);
+        Assert.Equal("ok", await service.CompleteTextAsync(userId, "test", "system", "prompt"));
+        using var body = System.Text.Json.JsonDocument.Parse(handler.LastBody!);
+        Assert.True(body.RootElement.GetProperty("max_tokens").GetInt32() >= 8192);
+        Assert.True((await service.GetStatusAsync(userId)).LastCallSucceeded);
+        config["Kimi:ApiKey"] = "changed-test-key";
+        Assert.Null((await service.GetStatusAsync(userId)).LastCallSucceeded);
     }
 
     private static JobPilotDbContext CreateDb()
@@ -126,6 +208,15 @@ public sealed class AiResilienceTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         return new JobPilotDbContext(options);
+    }
+
+    private sealed class CapturingLogger : ILogger<AiCompletionService>
+    {
+        public List<string> Messages { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Messages.Add(formatter(state, exception));
     }
 
     private sealed class FlakyHandler : HttpMessageHandler
@@ -148,14 +239,16 @@ public sealed class AiResilienceTests
     private sealed class StaticHandler(HttpStatusCode status, string body) : HttpMessageHandler
     {
         public int Calls;
+        public string? LastBody;
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Calls++;
-            return Task.FromResult(new HttpResponseMessage(status)
+            LastBody = await request.Content!.ReadAsStringAsync(cancellationToken);
+            return new HttpResponseMessage(status)
             {
                 Content = new StringContent(body, Encoding.UTF8, "application/json"),
-            });
+            };
         }
     }
 }

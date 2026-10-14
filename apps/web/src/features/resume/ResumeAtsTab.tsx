@@ -14,6 +14,7 @@ import {
   Save,
   ShieldCheck,
 } from 'lucide-react'
+import { ResumeAiControl } from './ResumeAiControl'
 import { ResumeAtsHeader } from './ResumeAtsHeader'
 import { ResumeJobInput } from './ResumeJobInput'
 import { ResumeAtsPreview } from './ResumeAtsPreview'
@@ -387,16 +388,7 @@ export function ResumeAtsTab(props: Props) {
       <footer className="cv-footer">
         <span className="cv-footer__note"><Clock size={15} /> Última alteração há alguns segundos</span>
         <div className="cv-footer__actions">
-          <label className="cv-footer__note" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input
-              type="checkbox"
-              checked={useAi}
-              onChange={(event) => onToggleUseAi(event.target.checked)}
-              aria-label="Usar IA quando disponível"
-              style={{ width: 18, height: 18 }}
-            />
-            Usar IA
-          </label>
+          <ResumeAiControl enabled={useAi} busy={busy} onToggle={onToggleUseAi} />
           <button className="cv-btn cv-btn--secondary" onClick={() => void saveOutput()} disabled={!plainTextSectionId || !outputText.trim() || savingOutput} title="Salvar o texto revisado">
             <Save size={15} /> Salvar rascunho
           </button>

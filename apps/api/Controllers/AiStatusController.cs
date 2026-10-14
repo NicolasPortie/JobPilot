@@ -1,3 +1,4 @@
+using JobPilot.Api.Application.Contracts;
 using JobPilot.Api.Infrastructure;
 using JobPilot.Api.Services;
 using Microsoft.AspNetCore.Authorization;

@@ -320,3 +320,11 @@
   color: #a03a15;
 }
 
+
+/* Estado da IA acompanha a escolha sem disputar espaço com a ação principal. */
+.cv-ai-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
+.cv-ai-control__toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; color: var(--cv-ink); font-size: 12px; }
+.cv-ai-control__toggle input { width: 18px; height: 18px; accent-color: var(--cv-brand); }
+.cv-ai-control__toggle input:focus-visible { outline: 2px solid var(--cv-brand); outline-offset: 3px; }
+.cv-ai-control__status { color: var(--cv-muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.cv-ai-control__provider { display: block; }

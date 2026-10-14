@@ -5,11 +5,10 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using JobPilot.Api.Data;
 using JobPilot.Api.Domain;
-using Microsoft.EntityFrameworkCore;
 
 namespace JobPilot.Api.Services;
 
-public sealed class AiCompletionService(HttpClient http, IConfiguration configuration, JobPilotDbContext db, ILogger<AiCompletionService> logger, TraceRedactionService redaction, AiHealthTracker? health = null)
+public sealed partial class AiCompletionService(HttpClient http, IConfiguration configuration, JobPilotDbContext db, ILogger<AiCompletionService> logger, TraceRedactionService redaction, AiHealthTracker? health = null)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private const int MaxPromptChars = 50000;
@@ -35,13 +34,13 @@ public sealed class AiCompletionService(HttpClient http, IConfiguration configur
             {
                 text = await CompleteOllamaChatAsync(provider, system, prompt, format);
                 await RecordEstimatedUsageAsync(userId, provider, operation, system, prompt, text);
-                return ReportOutcome(provider, text);
+                return ReportOutcome(userId, provider, text);
             }
 
             var apiKey = SecretProtector.Unprotect(provider.EncryptedApiKey, configuration);
             if (string.IsNullOrWhiteSpace(apiKey))
             {
-                health?.RecordFailure(provider.Name, provider.Model, "Chave da API não configurada.");
+                health?.RecordFailure(userId, HealthIdentity(provider), "Chave da API não configurada.");
                 return null;
             }
 
@@ -49,26 +48,26 @@ public sealed class AiCompletionService(HttpClient http, IConfiguration configur
             {
                 text = await CompleteAnthropicMessagesAsync(provider, apiKey, system, prompt);
                 await RecordEstimatedUsageAsync(userId, provider, operation, system, prompt, text);
-                return ReportOutcome(provider, text);
+                return ReportOutcome(userId, provider, text);
             }
             if (provider.ApiFormat == "openai-responses")
-                return ReportOutcome(provider, await CompleteOpenAiResponsesAsync(provider, userId, operation, apiKey, system, prompt, format, attachments));
-            return ReportOutcome(provider, await CompleteOpenAiCompatibleAsync(provider, userId, operation, apiKey, system, prompt, format));
+                return ReportOutcome(userId, provider, await CompleteOpenAiResponsesAsync(provider, userId, operation, apiKey, system, prompt, format, attachments));
+            return ReportOutcome(userId, provider, await CompleteOpenAiCompatibleAsync(provider, userId, operation, apiKey, system, prompt, format));
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "AI completion failed with provider {ProviderName}.", provider.Name);
-            health?.RecordFailure(provider.Name, provider.Model, DescribeProviderError(ex));
+            logger.LogWarning("AI completion failed ({ErrorType}): {Reason}.", ex.GetType().Name, DescribeProviderError(ex));
+            health?.RecordFailure(userId, HealthIdentity(provider), DescribeProviderError(ex));
             return null;
         }
     }
 
-    private string? ReportOutcome(AiProvider provider, string? text)
+    private string? ReportOutcome(Guid userId, AiProvider provider, string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
-            health?.RecordFailure(provider.Name, provider.Model, "O provedor não retornou texto.");
+            health?.RecordFailure(userId, HealthIdentity(provider), "O provedor não retornou texto.");
         else
-            health?.RecordSuccess(provider.Name, provider.Model);
+            health?.RecordSuccess(userId, HealthIdentity(provider));
         return text;
     }
 
@@ -99,169 +98,6 @@ public sealed class AiCompletionService(HttpClient http, IConfiguration configur
         }
     }
 
-    public async Task<AiProviderConnectivityResult> TestProviderConnectivityAsync(AiProvider provider, Guid userId)
-    {
-        const string operation = "provider_test";
-        const string system = "Return a short health-check response.";
-        const string prompt = "Say only: ok";
-
-        try
-        {
-            AiProviderEndpointPolicy.Validate(provider, configuration);
-            string? text;
-            if (provider.ApiFormat == "ollama-chat" || provider.ProviderType == "ollama")
-            {
-                text = await CompleteOllamaChatAsync(provider, system, prompt, null);
-                await RecordEstimatedUsageAsync(userId, provider, operation, system, prompt, text);
-                return BuildConnectivityResult(text, provider.Model);
-            }
-
-            var apiKey = SecretProtector.Unprotect(provider.EncryptedApiKey, configuration);
-            if (string.IsNullOrWhiteSpace(apiKey))
-                return new(false, "failed", provider.Model, "Chave da API não configurada.");
-
-            if (provider.ApiFormat == "anthropic-messages")
-            {
-                text = await CompleteAnthropicMessagesAsync(provider, apiKey, system, prompt);
-                await RecordEstimatedUsageAsync(userId, provider, operation, system, prompt, text);
-                return BuildConnectivityResult(text, provider.Model);
-            }
-
-            if (provider.ApiFormat == "openai-responses")
-            {
-                text = await CompleteOpenAiResponsesAsync(provider, userId, operation, apiKey, system, prompt, null, []);
-                return BuildConnectivityResult(text, provider.Model);
-            }
-
-            text = await CompleteOpenAiCompatibleAsync(provider, userId, operation, apiKey, system, prompt, null);
-            return BuildConnectivityResult(text, provider.Model);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "AI provider connectivity test failed with provider {ProviderName}.", provider.Name);
-            return new(false, "failed", provider.Model, DescribeProviderError(ex));
-        }
-    }
-
-    /// <summary>
-    /// Escolhe o provedor de IA: um provedor salvo cuja chave ainda pode ser lida,
-    /// depois a chave configurada localmente (user-secrets/ambiente) e, por último,
-    /// o Ollama local. Chave salva com um segredo antigo é ignorada com aviso em vez
-    /// de derrubar toda chamada de IA.
-    /// </summary>
-    public async Task<AiProvider> ResolveProviderAsync(Guid userId)
-    {
-        var saved = await db.AiProviders
-            .Where(x => x.UserId == userId && x.IsActive)
-            .OrderByDescending(x => x.IsDefault)
-            .ThenBy(x => x.CreatedAt)
-            .ToListAsync();
-
-        foreach (var provider in saved.Where(x => !IsOllama(x)))
-        {
-            if (SecretProtector.TryUnprotect(provider.EncryptedApiKey, configuration, out var key, out _) && !string.IsNullOrWhiteSpace(key))
-                return provider;
-            logger.LogWarning("AI provider {ProviderName} ignored: saved API key cannot be read with the current Security:SecretKey.", provider.Name);
-        }
-
-        var configured = ConfiguredProvider();
-        if (configured is not null) return configured;
-
-        var localEnabled = configuration.GetValue("LocalLlm:Enabled", true);
-        var savedOllama = saved.FirstOrDefault(IsOllama);
-        if (localEnabled && savedOllama is not null) return savedOllama;
-        if (localEnabled) return LocalOllamaProvider();
-
-        return new AiProvider
-        {
-            Name = "Kimi Code",
-            ProviderType = "kimi",
-            BaseUrl = configuration["Kimi:BaseUrl"] ?? "https://api.kimi.com/coding",
-            Model = configuration["Kimi:Model"] ?? "kimi-for-coding",
-            ApiFormat = configuration["Kimi:Api"] ?? "anthropic-messages",
-            EncryptedApiKey = ""
-        };
-    }
-
-    /// <summary>Estado atual da IA para a interface, sem expor segredos.</summary>
-    public async Task<AiStatusResponse> GetStatusAsync(Guid userId)
-    {
-        var provider = await ResolveProviderAsync(userId);
-        var configured = IsOllama(provider) ||
-            SecretProtector.TryUnprotect(provider.EncryptedApiKey, configuration, out var key, out _) && !string.IsNullOrWhiteSpace(key);
-        var last = health?.Snapshot();
-        var sameProvider = last is not null && last.ProviderName == provider.Name && last.Model == provider.Model;
-        bool? lastOk = sameProvider ? last!.LastSucceeded : null;
-        var message = !configured
-            ? "Nenhuma chave de IA configurada. Defina Ai:Provider e Ai:ApiKey nos user-secrets da API."
-            : lastOk == false
-                ? $"A última chamada falhou: {last!.LastError}"
-                : IsOllama(provider)
-                    ? "Usando o Ollama local. Se ele não estiver rodando, o JobPilot usa o modo sem IA."
-                    : "IA pronta.";
-        return new AiStatusResponse(configured && lastOk != false, configured, provider.Name, provider.Model, lastOk, sameProvider ? last!.CheckedAt : null, message);
-    }
-
-    /// <summary>
-    /// Provedor definido na configuração local. <c>Ai:Provider</c> aceita
-    /// <c>anthropic</c>, <c>openai</c> ou <c>kimi</c>; as chaves antigas <c>Kimi:*</c>
-    /// continuam valendo quando <c>Ai:ApiKey</c> não está definido.
-    /// </summary>
-    private AiProvider? ConfiguredProvider()
-    {
-        var type = (configuration["Ai:Provider"] ?? "").Trim().ToLowerInvariant();
-        var genericKey = configuration["Ai:ApiKey"];
-        if (!string.IsNullOrWhiteSpace(genericKey) && type is "anthropic" or "openai" or "kimi")
-        {
-            var (name, baseUrl, model, format) = type switch
-            {
-                "anthropic" => ("Anthropic", "https://api.anthropic.com", "claude-haiku-5-5", "anthropic-messages"),
-                "openai" => ("OpenAI", "https://api.openai.com/v1", "gpt-4.1-mini", "openai-chat-completions"),
-                _ => ("Kimi Code", "https://api.kimi.com/coding", "kimi-for-coding", "anthropic-messages")
-            };
-            return new AiProvider
-            {
-                Name = name,
-                ProviderType = type,
-                BaseUrl = FirstNonEmpty(configuration["Ai:BaseUrl"]) ?? baseUrl,
-                Model = FirstNonEmpty(configuration["Ai:Model"]) ?? model,
-                ApiFormat = FirstNonEmpty(configuration["Ai:ApiFormat"]) ?? format,
-                EncryptedApiKey = SecretProtector.Protect(genericKey, configuration)
-            };
-        }
-
-        var kimiKey = FirstNonEmpty(
-            configuration["Kimi:ApiKey"],
-            Environment.GetEnvironmentVariable("KIMI_API_KEY"),
-            Environment.GetEnvironmentVariable("KIMI_API_KEY", EnvironmentVariableTarget.User));
-        if (string.IsNullOrWhiteSpace(kimiKey)) return null;
-        return new AiProvider
-        {
-            Name = "Kimi Code",
-            ProviderType = "kimi",
-            BaseUrl = configuration["Kimi:BaseUrl"] ?? "https://api.kimi.com/coding",
-            Model = configuration["Kimi:Model"] ?? "kimi-for-coding",
-            ApiFormat = configuration["Kimi:Api"] ?? "anthropic-messages",
-            EncryptedApiKey = SecretProtector.Protect(kimiKey, configuration)
-        };
-    }
-
-    private AiProvider LocalOllamaProvider() => new()
-    {
-        Name = "Ollama Local",
-        ProviderType = "ollama",
-        BaseUrl = configuration["LocalLlm:BaseUrl"] ?? "http://localhost:11434",
-        Model = configuration["LocalLlm:Model"] ?? "qwen3:4b-instruct",
-        ApiFormat = "ollama-chat",
-        EncryptedApiKey = ""
-    };
-
-    private static bool IsOllama(AiProvider provider) =>
-        provider.ApiFormat == "ollama-chat" || provider.ProviderType == "ollama";
-
-    private static string? FirstNonEmpty(params string?[] values) =>
-        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
-
     private static AiProviderConnectivityResult BuildConnectivityResult(string? text, string model) =>
         string.IsNullOrWhiteSpace(text)
             ? new(false, "failed", model, "O provedor não retornou texto no teste.")
@@ -273,9 +109,11 @@ public sealed class AiCompletionService(HttpClient http, IConfiguration configur
             return "A chave salva não pode ser lida com o segredo atual da API. Edite o provedor e salve a chave novamente.";
 
         if (ex is HttpRequestException http && http.StatusCode is not null)
-            return $"HTTP {(int)http.StatusCode}: {http.Message}";
+            return $"O provedor recusou a chamada (HTTP {(int)http.StatusCode}).";
 
-        return ex.Message;
+        return ex is OperationCanceledException
+            ? "O provedor não respondeu dentro do prazo."
+            : "Não foi possível concluir a chamada ao provedor.";
     }
 
     public async Task<string> ActiveModelNameAsync(Guid userId)
@@ -300,17 +138,10 @@ public sealed class AiCompletionService(HttpClient http, IConfiguration configur
         return string.Join("", body?.Content.Where(x => x.Type == "text").Select(x => x.Text) ?? []).Trim();
     }
 
-    // Mantém o motivo devolvido pelo provedor (ex.: plano sem acesso, cota) no diagnóstico.
-    private static async Task EnsureSuccessAsync(HttpResponseMessage response)
+    private static Task EnsureSuccessAsync(HttpResponseMessage response)
     {
-        if (response.IsSuccessStatusCode) return;
-        var detail = "";
-        try { detail = (await response.Content.ReadAsStringAsync()).Trim(); } catch { }
-        if (detail.Length > 300) detail = detail[..300];
-        throw new HttpRequestException(
-            string.IsNullOrWhiteSpace(detail) ? $"O provedor recusou a chamada ({(int)response.StatusCode})." : detail,
-            null,
-            response.StatusCode);
+        response.EnsureSuccessStatusCode();
+        return Task.CompletedTask;
     }
 
     private async Task<string?> CompleteOpenAiResponsesAsync(AiProvider provider, Guid userId, string operation, string apiKey, string system, string prompt, object? format, AiInputAttachment[] attachments)
@@ -528,5 +359,3 @@ public sealed class AiCompletionService(HttpClient http, IConfiguration configur
 }
 
 public sealed record AiProviderConnectivityResult(bool Ok, string Sample, string Model, string? Error);
-
-public sealed record AiStatusResponse(bool Available, bool Configured, string Provider, string Model, bool? LastCallSucceeded, DateTimeOffset? LastCheckedAt, string Message);

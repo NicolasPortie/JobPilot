@@ -21,7 +21,10 @@ public class AiChatServiceTests
             {
                 ["Auth:JwtKey"] = "test-secret-key-with-enough-length-32",
                 ["Security:SecretKey"] = "test-data-key-with-enough-length-32",
-                ["Ai:AllowedHosts"] = "ai.example.test,api.openai.test"
+                ["Ai:AllowedHosts"] = "ai.example.test,api.openai.test",
+                // Isola o teste de chave Kimi definida no ambiente da máquina.
+                ["Kimi:ApiKey"] = "",
+                ["KIMI_API_KEY"] = ""
             })
             .Build();
         var provider = new AiProvider
@@ -84,7 +87,10 @@ public class AiChatServiceTests
             {
                 ["Auth:JwtKey"] = "test-secret-key-with-enough-length-32",
                 ["Security:SecretKey"] = "test-data-key-with-enough-length-32",
-                ["Ai:AllowedHosts"] = "ai.example.test,api.openai.test"
+                ["Ai:AllowedHosts"] = "ai.example.test,api.openai.test",
+                // Isola o teste de chave Kimi definida no ambiente da máquina.
+                ["Kimi:ApiKey"] = "",
+                ["KIMI_API_KEY"] = ""
             })
             .Build();
         db.AiProviders.Add(new AiProvider

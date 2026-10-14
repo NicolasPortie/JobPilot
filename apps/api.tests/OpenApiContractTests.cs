@@ -22,7 +22,7 @@ public sealed class OpenApiContractTests(ApiTestFixture fixture) : IClassFixture
 
         string[] legacy =
         [
-            "/api/agent", "/api/ai/", "/api/answers", "/api/application-jobs",
+            "/api/agent", "/api/ai/answer-draft", "/api/ai/providers", "/api/answers", "/api/application-jobs",
             "/api/automation", "/api/checkpoints", "/api/events", "/api/health/operational",
             "/api/platform-credentials", "/api/question-patterns", "/api/runs", "/api/system",
         ];

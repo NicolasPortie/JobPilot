@@ -342,7 +342,7 @@ internal static partial class ResumeStructureParser
                 continue;
             }
 
-            if (current is { Bullets.Count: 0 } && (!current.HasHeader || current.Company.Length == 0 || current.Role.Length == 0) && line.Length <= 90)
+            if (current is { Bullets.Count: 0 } && (!current.HasHeader || current.Company.Length == 0 || current.Role.Length == 0) && line.Length <= 90 && !line.EndsWith('.'))
             {
                 ApplyHeader(current, line);
                 continue;

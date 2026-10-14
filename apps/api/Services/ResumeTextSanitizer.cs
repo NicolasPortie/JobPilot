@@ -29,7 +29,7 @@ internal static partial class ResumeTextSanitizer
                 text = text[(index + heading.Length)..].Trim();
         }
 
-        var stop = Regex.Match(text, @"(?i)\b(COMPETENCIAS|COMPETÊNCIAS|SKILLS|PROJETOS|FORMACAO|FORMAÇÃO|EDUCACAO|EDUCAÇÃO|CERTIFICACOES|CERTIFICAÇÕES|IDIOMAS|TEXTO IMPORTADO)\b");
+        var stop = Regex.Match(text, @"\b(COMPETENCIAS|COMPETÊNCIAS|SKILLS|PROJETOS|FORMACAO|FORMAÇÃO|EDUCACAO|EDUCAÇÃO|CERTIFICACOES|CERTIFICAÇÕES|IDIOMAS|TEXTO IMPORTADO)\b");
         if (stop.Success)
             text = text[..stop.Index].Trim();
 

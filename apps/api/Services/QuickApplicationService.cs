@@ -58,7 +58,7 @@ public sealed partial class QuickApplicationService(
             .Where(x => x.UserId == userId && targetIds.Contains(x.Id))
             .ToDictionaryAsync(x => x.Id);
 
-        return versions.Select(version =>
+        var items = versions.Select(version =>
         {
             var targetId = TargetIdOf(version);
             byId.TryGetValue(targetId ?? Guid.Empty, out var target);
@@ -66,7 +66,14 @@ public sealed partial class QuickApplicationService(
                 version.Id, targetId, version.TargetRole, version.TargetCompany,
                 target?.Location ?? "", target?.SourceUrl ?? "", version.AtsScore,
                 target?.Status == AppliedStatus, version.CreatedAt);
-        }).ToArray();
+        }).ToList();
+
+        // Gerar de novo o mesmo link cria outra versão: o histórico mostra a mais recente de cada vaga
+        // e considera enviada se qualquer geração dela foi marcada como enviada.
+        return items
+            .GroupBy(item => string.IsNullOrWhiteSpace(item.SourceUrl) ? item.ResumeVersionId.ToString() : item.SourceUrl.Trim().ToLowerInvariant())
+            .Select(group => group.First() with { Applied = group.Any(item => item.Applied) })
+            .ToArray();
     }
 
     public async Task SetAppliedAsync(Guid userId, Guid resumeVersionId, bool applied)

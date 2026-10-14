@@ -7,6 +7,7 @@ import { emptyProfile } from './defaults'
 import { downloadResumeVersion, fileNameFromDisposition } from './downloads'
 import type { ResumeWorkflowState } from './resumeWorkflowModels'
 import { useResumeWorkflow } from './useResumeWorkflow'
+import { safeHttpUrl } from './utils'
 
 function ok<T>(data: T, headers: Record<string, string> = {}) {
   return { data, status: 200, statusText: 'OK', headers, config: { headers: new AxiosHeaders() } }
@@ -116,6 +117,26 @@ describe('quick flow in the workflow hook', () => {
     expect(state.clearJobInputs).toHaveBeenCalledOnce()
   })
 
+  it('clears review answers of the previous job when starting the next one', () => {
+    const answers: unknown[] = []
+    const { state } = makeState({ setReviewAnswers: (action) => { answers.push(action) } })
+
+    useResumeWorkflow(state).startNextJob()
+
+    expect(answers.at(-1)).toEqual({})
+  })
+
+  it('reports failure when the server does not save the applied status', async () => {
+    vi.spyOn(applicationsClient, 'setApplied').mockRejectedValue({ response: { data: { message: 'Sessão expirada' } } })
+    const { state, calls } = makeState()
+
+    const saved = await useResumeWorkflow(state).markApplied('v1', true)
+
+    expect(saved).toBe(false)
+    expect(calls.applied).toBeUndefined()
+    expect(calls.notice?.at(-1)).toBe('Sessão expirada')
+  })
+
   it('marks and unmarks an application as sent', async () => {
     vi.spyOn(applicationsClient, 'setApplied').mockResolvedValue(ok(undefined))
     const { state } = makeState()
@@ -128,5 +149,17 @@ describe('quick flow in the workflow hook', () => {
     expect(applicationsClient.setApplied).toHaveBeenNthCalledWith(1, 'v1', true)
     expect(applicationsClient.setApplied).toHaveBeenNthCalledWith(2, 'v1', false)
     expect(applied).toEqual([['v1'], []])
+  })
+})
+
+describe('safeHttpUrl', () => {
+  it('only lets http(s) links through', () => {
+    expect(safeHttpUrl('https://vagas.example/1')).toBe('https://vagas.example/1')
+    expect(safeHttpUrl('  http://vagas.example  ')).toBe('http://vagas.example')
+    expect(safeHttpUrl('javascript:alert(1)')).toBe('')
+    expect(safeHttpUrl('data:text/html,<b>x</b>')).toBe('')
+    expect(safeHttpUrl('https://a.example/1 https://b.example/2')).toBe('')
+    expect(safeHttpUrl('')).toBe('')
+    expect(safeHttpUrl(undefined)).toBe('')
   })
 })

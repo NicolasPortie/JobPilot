@@ -16,6 +16,7 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import { ResumeAiControl } from './ResumeAiControl'
+import { safeHttpUrl } from '../../app/utils'
 import { ResumeAtsHeader } from './ResumeAtsHeader'
 import { ResumeJobInput } from './ResumeJobInput'
 import { ResumeAtsPreview } from './ResumeAtsPreview'
@@ -192,7 +193,7 @@ export function ResumeAtsTab(props: Props) {
     onBuild()
   }
 
-  const jobUrlToOpen = jobTarget?.sourceUrl || (/^https?:\/\/\S+$/i.test(jobUrl.trim()) ? jobUrl.trim() : '')
+  const jobUrlToOpen = safeHttpUrl(jobTarget?.sourceUrl) || safeHttpUrl(jobUrl)
   const currentApplied = draft ? appliedVersionIds.includes(draft.tailoredVersionId) : false
 
   function cycleVersion() {
@@ -299,7 +300,7 @@ export function ResumeAtsTab(props: Props) {
                 {batchItems.map((item) => {
                   const versionId = item.tailored?.tailoredVersionId ?? ''
                   const applied = appliedVersionIds.includes(versionId)
-                  const link = item.target?.sourceUrl ?? ''
+                  const link = safeHttpUrl(item.target?.sourceUrl)
                   return (
                     <div key={item.input} className={`cv-batch__item${item.succeeded ? '' : ' cv-batch__item--error'}`}>
                       <div className="cv-batch__body">

@@ -16,6 +16,8 @@ is described as a public multi-tenant service.
 | P1 | Container export | Production image does not bundle Chromium for PDF generation | PDF export smoke test passes using the production image |
 | P1 | Resume text model | Structured sections and a full-text section coexist in generated versions | Define one authoritative editing representation and test edits without duplicate content |
 | P1 | Observability | Agent primarily writes console logs | Structured logs, metrics, and retention policy |
+| P1 | Quick flow batch | `POST /api/applications/quick` processa até 15 vagas de forma síncrona numa só requisição (nginx com `proxy_read_timeout 600s`) | Fila/execução em segundo plano com progresso e cancelamento |
+| P1 | Applied status | Status "enviada" fica em `JobTarget.Status`; cada geração cria um novo alvo e o histórico agrupa por link | Entidade própria de candidatura (vaga, versão, status, data) |
 | P2 | Static analysis | Full recommended analyzer set exposes a large historical warning baseline | Enable analyzers incrementally with a clean build |
 | P2 | Historical encoding | Some archived documents contain mojibake | Archive normalized or explicitly preserved as source |
 

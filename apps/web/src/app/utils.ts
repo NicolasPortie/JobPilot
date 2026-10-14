@@ -14,6 +14,18 @@ export function responseMessage(error: unknown, fallback: string) {
   return fallback
 }
 
+/** Devolve a URL só se for http(s); qualquer outro esquema (ex.: javascript:) não vira link. */
+export function safeHttpUrl(value: string | null | undefined) {
+  const text = (value ?? '').trim()
+  if (!text || /\s/.test(text)) return ''
+  try {
+    const url = new URL(text)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? text : ''
+  } catch {
+    return ''
+  }
+}
+
 export function isApiConnectionError(error: unknown) {
   if (typeof error !== 'object' || !error) return false
 

@@ -54,16 +54,23 @@ internal static class JobTargetAnalyzer
     internal static List<(string Tech, int Start, int End)> MatchTechnologies(string normalizedText)
     {
         var matches = new List<(string Tech, int Start, int End)>();
-        foreach (var tech in KnownTech)
-        {
-            var options = tech.Length <= 3 && tech.All(char.IsLetter) ? RegexOptions.CultureInvariant : RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
-            // "8+" em ".NET 8+" é sufixo de versão; já em "C++" o "+" faz parte do nome.
-            var trailing = char.IsDigit(tech[^1]) ? @"(?![\p{L}\p{N}#])" : @"(?![\p{L}\p{N}#+])";
-            var pattern = $@"(?<![\p{{L}}\p{{N}}#+.]){Regex.Escape(RemoveDiacritics(tech))}{trailing}(?!\.[\p{{L}}\p{{N}}])";
-            foreach (Match match in Regex.Matches(normalizedText, pattern, options))
+        foreach (var (tech, pattern) in TechnologyPatterns.Value)
+            foreach (Match match in pattern.Matches(normalizedText))
                 matches.Add((tech, match.Index, match.Index + match.Length));
-        }
         return matches;
+    }
+
+    // ~300 padrões: montados uma única vez, não a cada vaga ou validação de texto de IA.
+    private static readonly Lazy<(string Tech, Regex Pattern)[]> TechnologyPatterns =
+        new(() => KnownTech.Select(tech => (tech, BuildTechnologyPattern(tech))).ToArray());
+
+    private static Regex BuildTechnologyPattern(string tech)
+    {
+        var options = tech.Length <= 3 && tech.All(char.IsLetter) ? RegexOptions.CultureInvariant : RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
+        // "8+" em ".NET 8+" é sufixo de versão; já em "C++" o "+" faz parte do nome.
+        var trailing = char.IsDigit(tech[^1]) ? @"(?![\p{L}\p{N}#])" : @"(?![\p{L}\p{N}#+])";
+        var pattern = $@"(?<![\p{{L}}\p{{N}}#+.]){Regex.Escape(RemoveDiacritics(tech))}{trailing}(?!\.[\p{{L}}\p{{N}}])";
+        return new Regex(pattern, options);
     }
 
     /// <summary>

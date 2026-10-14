@@ -90,6 +90,23 @@ public sealed class QuickApplicationFlowTests(ApiTestFixture fixture) : IClassFi
     }
 
     [Fact]
+    public async Task History_ShowsOneEntryPerJobLinkAndKeepsTheSentMark()
+    {
+        var (client, _, _) = await SignInWithBaseResumeAsync();
+        const string link = "https://empresa.example/vaga/9";
+        await client.PostAsJsonAsync("/api/applications/quick", new QuickTailorRequest(Posting, link, UseAi: false));
+        var first = (await client.GetFromJsonAsync<ApplicationHistoryItem[]>("/api/applications/history"))![0];
+        await client.PutAsJsonAsync($"/api/applications/{first.ResumeVersionId}/applied", new SetApplicationStatusRequest(true));
+
+        await client.PostAsJsonAsync("/api/applications/quick", new QuickTailorRequest(Posting, link.ToUpperInvariant().Replace("HTTPS", "https"), UseAi: false));
+        var history = await client.GetFromJsonAsync<ApplicationHistoryItem[]>("/api/applications/history");
+
+        var entry = Assert.Single(history!);
+        Assert.True(entry.Applied);
+        Assert.NotEqual(first.ResumeVersionId, entry.ResumeVersionId);
+    }
+
+    [Fact]
     public async Task Quick_WithManyLinks_ReportsEachFailureWithoutFailingTheRest()
     {
         var (client, _, _) = await SignInWithBaseResumeAsync();

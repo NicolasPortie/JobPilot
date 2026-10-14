@@ -264,7 +264,7 @@ public sealed class ProfileImportService
              data.ProfessionalSummary.Length > profile.ProfessionalSummary.Length / 2))
             profile.ProfessionalSummary = data.ProfessionalSummary.Trim();
         // O perfil espelha o currículo importado: competências antigas que o arquivo não cita não passam a constar como fato.
-        profile.Skills = ResumeProfileInference.MergeSkills([], data.Skills);
+        if (data.Skills.Length > 0) profile.Skills = ResumeProfileInference.MergeSkills([], data.Skills);
         if (!string.IsNullOrWhiteSpace(resumePath)) profile.ResumePath = resumePath;
         profile.UpdatedAt = DateTimeOffset.UtcNow;
     }

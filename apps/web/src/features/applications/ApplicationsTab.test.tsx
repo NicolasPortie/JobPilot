@@ -47,6 +47,26 @@ describe('ApplicationsTab', () => {
     expect(screen.getAllByText('Enviada ✓')).toHaveLength(2)
   })
 
+  it('does not show a sent status the server failed to save', async () => {
+    vi.spyOn(applicationsClient, 'history').mockResolvedValue(ok(history))
+    const onMarkApplied = vi.fn().mockResolvedValue(false)
+    render(<ApplicationsTab exportBusy={false} onDownload={vi.fn()} onMarkApplied={onMarkApplied} />)
+    await screen.findByText(/Dev \.NET · Alfa/)
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Marcar enviada/ })[0])
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Não foi possível atualizar')
+    expect(screen.getAllByText('Enviada ✓')).toHaveLength(1)
+  })
+
+  it('never links a job URL that is not http(s)', async () => {
+    vi.spyOn(applicationsClient, 'history').mockResolvedValue(ok([{ ...history[0], sourceUrl: 'javascript:alert(1)' }]))
+    render(<ApplicationsTab exportBusy={false} onDownload={vi.fn()} onMarkApplied={vi.fn()} />)
+    await screen.findByText(/Dev \.NET · Alfa/)
+
+    expect(screen.queryByRole('link', { name: /Abrir vaga/ })).toBeNull()
+  })
+
   it('explains an empty history and surfaces load errors', async () => {
     vi.spyOn(applicationsClient, 'history').mockResolvedValue(ok([]))
     const view = render(<ApplicationsTab exportBusy={false} onDownload={vi.fn()} onMarkApplied={vi.fn()} />)

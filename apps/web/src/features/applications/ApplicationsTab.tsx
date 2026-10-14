@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Download, ExternalLink, RefreshCw, Send } from 'lucide-react'
 import { applicationsClient } from '../../api/applicationsClient'
-import { responseMessage } from '../../app/utils'
+import { responseMessage, safeHttpUrl } from '../../app/utils'
 import type { ApplicationHistoryItem } from '../../types'
 
 type Filter = 'all' | 'pending' | 'applied'
@@ -9,7 +9,7 @@ type Filter = 'all' | 'pending' | 'applied'
 type Props = {
   exportBusy: boolean
   onDownload: (versionId: string, format: 'word' | 'pdf') => void
-  onMarkApplied: (versionId: string, applied: boolean) => Promise<void> | void
+  onMarkApplied: (versionId: string, applied: boolean) => Promise<boolean | void> | boolean | void
 }
 
 export function ApplicationsTab({ exportBusy, onDownload, onMarkApplied }: Props) {
@@ -34,7 +34,12 @@ export function ApplicationsTab({ exportBusy, onDownload, onMarkApplied }: Props
   useEffect(() => { queueMicrotask(() => void load()) }, [load])
 
   async function toggleApplied(item: ApplicationHistoryItem) {
-    await onMarkApplied(item.resumeVersionId, !item.applied)
+    const saved = await onMarkApplied(item.resumeVersionId, !item.applied)
+    if (saved === false) {
+      setError('Não foi possível atualizar o status da candidatura. Tente de novo.')
+      return
+    }
+    setError('')
     setItems((current) => current.map((entry) =>
       entry.resumeVersionId === item.resumeVersionId ? { ...entry, applied: !item.applied } : entry))
   }
@@ -81,8 +86,8 @@ export function ApplicationsTab({ exportBusy, onDownload, onMarkApplied }: Props
               <div className="cv-resultbar__actions">
                 <button className="cv-btn cv-btn--primary cv-btn--small" onClick={() => onDownload(item.resumeVersionId, 'pdf')} disabled={exportBusy}><Download size={14} /> PDF</button>
                 <button className="cv-btn cv-btn--secondary cv-btn--small" onClick={() => onDownload(item.resumeVersionId, 'word')} disabled={exportBusy}>Word</button>
-                {item.sourceUrl && (
-                  <a className="cv-btn cv-btn--secondary cv-btn--small" href={item.sourceUrl} target="_blank" rel="noreferrer noopener"><ExternalLink size={14} /> Abrir vaga</a>
+                {safeHttpUrl(item.sourceUrl) && (
+                  <a className="cv-btn cv-btn--secondary cv-btn--small" href={safeHttpUrl(item.sourceUrl)} target="_blank" rel="noreferrer noopener"><ExternalLink size={14} /> Abrir vaga</a>
                 )}
                 <button className="cv-btn cv-btn--secondary cv-btn--small" aria-pressed={item.applied} onClick={() => void toggleApplied(item)}>
                   <Send size={14} /> {item.applied ? 'Enviada ✓' : 'Marcar enviada'}

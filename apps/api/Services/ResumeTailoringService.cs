@@ -20,7 +20,7 @@ public sealed class ResumeTailoringService(JobPilotDbContext db, ResumeEvidenceM
     public async Task<TailoredResumeResponse> TailorAsync(Guid userId, TailorResumeRequest request)
     {
         var useTransaction = db.Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory";
-        var transaction = useTransaction ? await db.Database.BeginTransactionAsync() : null;
+        await using var transaction = useTransaction ? await db.Database.BeginTransactionAsync() : null;
         var layout = ResumeTextSanitizer.NormalizeLayout(request.Layout);
         var baseVersion = await db.ResumeVersions
             .Include(x => x.Document)
@@ -149,7 +149,7 @@ public sealed class ResumeTailoringService(JobPilotDbContext db, ResumeEvidenceM
     public async Task<TailoredResumeResponse> BuildGenericAtsAsync(Guid userId, BuildGenericAtsResumeRequest request)
     {
         var useTransaction = db.Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory";
-        var transaction = useTransaction ? await db.Database.BeginTransactionAsync() : null;
+        await using var transaction = useTransaction ? await db.Database.BeginTransactionAsync() : null;
         var layout = ResumeTextSanitizer.NormalizeLayout(request.Layout);
         var baseVersion = await db.ResumeVersions
             .Include(x => x.Document)

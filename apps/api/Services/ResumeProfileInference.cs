@@ -149,7 +149,7 @@ internal static class ResumeProfileInference
 
     public static bool IsPollutedSummary(string? summary) =>
         !string.IsNullOrWhiteSpace(summary) &&
-        (summary.Contains('@') || Regex.IsMatch(summary, @"\d{4,5}[-\s]?\d{4}") ||
+        (summary.Contains('@') || Regex.IsMatch(summary, @"(\(\d{2}\)\s?|\b\d{2}\s)9?\d{4}[-\s]?\d{4}\b") ||
          Regex.IsMatch(summary, @"(?i)\b(PERFIL PROFISSIONAL|RESUMO PROFISSIONAL|LinkedIn \| GitHub)\b"));
 
     private static (string City, string State) GuessLocation(string text, string currentCity, string currentState)

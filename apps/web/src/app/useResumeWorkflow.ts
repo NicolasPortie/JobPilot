@@ -45,6 +45,7 @@ export function useResumeWorkflow(state: ResumeWorkflowState) {
   async function buildAtsResume() {
     state.setAtsResumeBusy(true)
     state.setAtsResumeNotice('')
+    state.setReviewAnswers({})
     try {
       const versionId = activeBaseVersionId()
       if (!versionId) {
@@ -160,13 +161,16 @@ export function useResumeWorkflow(state: ResumeWorkflowState) {
     await downloadVersion(state.atsTailoredResume.tailoredVersionId, format)
   }
 
+  /** Devolve false quando o servidor não gravou o status, para a tela não mostrar um estado falso. */
   async function markApplied(versionId: string, applied: boolean) {
     try {
       await applicationsClient.setApplied(versionId, applied)
       state.setAppliedVersionIds?.((current) =>
         applied ? [...new Set([...current, versionId])] : current.filter((id) => id !== versionId))
+      return true
     } catch (error: unknown) {
       state.setAtsResumeNotice(responseMessage(error, 'Não foi possível atualizar o status da candidatura.'))
+      return false
     }
   }
 
@@ -177,6 +181,8 @@ export function useResumeWorkflow(state: ResumeWorkflowState) {
     state.setAtsBatchItems?.([])
     state.setAtsScreenshotFile(null)
     state.setAtsResumeNotice('')
+    // Respostas de revisão pertencem à vaga anterior: não podem ir junto na próxima regeneração.
+    state.setReviewAnswers({})
     state.clearJobInputs?.()
   }
 

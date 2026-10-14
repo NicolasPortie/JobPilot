@@ -356,6 +356,31 @@ public class ProfileImportServiceTests
     }
 
 
+    [Fact]
+    public async Task ImportAsync_SemCompetenciasNoArquivo_MantemAsDoPerfil()
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        var resumePath = Path.Combine(Path.GetTempPath(), $"jobpilot-resume-{Guid.NewGuid():N}.txt");
+        await File.WriteAllTextAsync(resumePath, "Maria Souza\nEXPERIÊNCIA\nAcme | Atendente (2019 - 2022)\n- Atendimento a clientes.");
+        db.CandidateProfiles.Add(new CandidateProfile { Id = Guid.NewGuid(), UserId = userId, ResumePath = resumePath, Skills = ["Excel", "Atendimento"] });
+        await db.SaveChangesAsync();
+
+        try
+        {
+            var service = new ProfileImportService(db, new ResumeTextService(), new ResumeOcrService(), new FakeAiChatService(), new HttpClient());
+
+            var result = await service.ImportAsync(userId, new ProfileImportRequest(FetchPublicLinks: false, UseAi: false));
+
+            Assert.Equal(["Atendimento", "Excel"], result.Profile.Skills.OrderBy(x => x).ToArray());
+            Assert.DoesNotContain(result.Warnings, warning => warning.Contains("removidas"));
+        }
+        finally
+        {
+            if (File.Exists(resumePath)) File.Delete(resumePath);
+        }
+    }
+
     private static JobPilotDbContext CreateDb()
     {
         var options = new DbContextOptionsBuilder<JobPilotDbContext>()

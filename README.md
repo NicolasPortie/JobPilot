@@ -12,6 +12,15 @@ JobPilot é um workspace local-first para preparar um currículo ATS verdadeiro 
 
 O núcleo do produto está em `apps/web` e `apps/api`. O runtime `apps/agent` é legado em quarentena: não participa do fluxo web e permanece somente para migração, testes históricos e eventual decisão futura. A extensão do navegador foi removida do produto (código, protocolo, tabelas e docs): não há nada para instalar ou parear.
 
+## Uso rápido (várias candidaturas)
+
+1. Em **Perfil**, envie o PDF/DOCX do seu currículo uma vez. O JobPilot separa experiências, projetos, formação, certificações e idiomas e guarda uma versão base.
+2. Em **Currículo**, cole a vaga (texto), um link ou vários links (um por linha, até 15) e pressione `Ctrl + Enter`.
+3. Baixe o PDF (já nomeado `Curriculo-Nome-Cargo-Empresa.pdf`, em A4), abra a vaga e envie a candidatura **você mesmo**.
+4. Marque como enviada e use **Próxima vaga**. A aba **Candidaturas** guarda o histórico para baixar de novo.
+
+O currículo adaptado só reorganiza e prioriza o que já está no seu currículo: nenhuma tecnologia ou experiência é acrescentada. Requisitos da vaga que o currículo não comprova aparecem como lacunas para você decidir.
+
 ## Stack
 
 - ASP.NET Core + Entity Framework Core em `apps/api`
@@ -71,12 +80,25 @@ dotnet user-secrets set "Auth:SeedEmail" "seu-email-local@example.com" --project
 dotnet user-secrets set "Auth:SeedPassword" "uma-senha-local-forte" --project apps\api
 ```
 
+A IA (opcional) escolhe o provedor nesta ordem: configuração local, provedor salvo cuja chave ainda pode ser lida e Ollama local. Para usar um provedor externo:
+
+```powershell
+dotnet user-secrets set "Ai:Provider" "anthropic" --project apps\api   # ou openai, kimi
+dotnet user-secrets set "Ai:ApiKey" "<sua-chave>" --project apps\api
+```
+
+Também vale a configuração antiga `Kimi:ApiKey`/`KIMI_API_KEY`. O controle "Usar IA" da tela mostra se o provedor está respondendo; sem IA, o JobPilot gera o currículo de forma determinística, sem inventar conteúdo. Texto da IA é descartado se citar tecnologia que não está no seu currículo.
+
 `Security:SecretKey` é independente da chave JWT. O runtime legado fica desligado por padrão (`Features:EnableLegacyRuntime=false`) e não deve ser ativado em uma instalação de produção.
 
 ## Contratos principais da API
 
 - `GET/PUT /api/profile` — base profissional sem CPF ou caminhos físicos.
 - `POST /api/profile/import-resume-file` — upload privado do currículo.
+- `POST /api/profile/reimport-resume` — reprocessa o último arquivo enviado com o leitor atual.
+- `POST /api/applications/quick` — vaga (link, vários links ou texto) → currículo adaptado em uma chamada.
+- `GET /api/applications/history` e `PUT /api/applications/{versionId}/applied` — histórico e status manual de envio.
+- `GET /api/ai/status` — provedor de IA configurado e resultado da última chamada.
 - `POST /api/job-targets/organize` — análise de link ou texto da vaga.
 - `POST /api/job-targets/organize-screenshot` — análise de screenshot/PDF enviado.
 - `POST /api/resume/tailor` e `/api/resume/ats-build` — adaptação com evidências.

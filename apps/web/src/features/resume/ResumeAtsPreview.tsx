@@ -147,7 +147,9 @@ export function ResumeAtsPreview({ profile, draft, previewRole, baseReady, hasJo
             <ChecklistRow done={Boolean(draft)} label={draft ? 'Versão adaptada gerada' : 'Versão adaptada aguardando'} />
           </div>
           {draft && draft.usedAi === false && (
-            <p className="cv-hint" role="status">IA indisponível — resultado determinístico. Revise com atenção antes de exportar.</p>
+            <p className="cv-hint" role="status">
+              {draft.aiNotice ?? 'IA indisponível — resultado determinístico.'} Revise com atenção antes de exportar.
+            </p>
           )}
         </div>
 

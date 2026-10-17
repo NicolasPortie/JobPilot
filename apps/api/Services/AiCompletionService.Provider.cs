@@ -66,26 +66,12 @@ public sealed partial class AiCompletionService
     }
 
     /// <summary>
-    /// Provedor definido na configuração local. <c>Ai:Provider</c> aceita
-    /// <c>anthropic</c>, <c>openai</c> ou <c>kimi</c>; as chaves antigas <c>Kimi:*</c>
-    /// têm precedência sobre <c>Ai:ApiKey</c>.
+    /// Provedor definido na configuração local. <c>Ai:Provider</c> (<c>anthropic</c>, <c>openai</c>
+    /// ou <c>kimi</c>) com <c>Ai:ApiKey</c> é a escolha explícita e vence as chaves antigas
+    /// <c>Kimi:*</c>/<c>KIMI_API_KEY</c>, que continuam valendo quando <c>Ai:*</c> não está definido.
     /// </summary>
     private AiProvider? ConfiguredProvider()
     {
-        var kimiKey = FirstNonEmpty(
-            configuration["Kimi:ApiKey"],
-            configuration["KIMI_API_KEY"] ?? Environment.GetEnvironmentVariable("KIMI_API_KEY") ??
-                Environment.GetEnvironmentVariable("KIMI_API_KEY", EnvironmentVariableTarget.User));
-        if (!string.IsNullOrWhiteSpace(kimiKey)) return new AiProvider
-        {
-            Name = "Kimi Code",
-            ProviderType = "kimi",
-            BaseUrl = configuration["Kimi:BaseUrl"] ?? "https://api.kimi.com/coding",
-            Model = configuration["Kimi:Model"] ?? "kimi-for-coding",
-            ApiFormat = configuration["Kimi:Api"] ?? "anthropic-messages",
-            EncryptedApiKey = SecretProtector.Protect(kimiKey, configuration)
-        };
-
         var type = (configuration["Ai:Provider"] ?? "").Trim().ToLowerInvariant();
         var genericKey = configuration["Ai:ApiKey"];
         if (!string.IsNullOrWhiteSpace(genericKey) && type is "anthropic" or "openai" or "kimi")
@@ -106,7 +92,21 @@ public sealed partial class AiCompletionService
                 EncryptedApiKey = SecretProtector.Protect(genericKey, configuration)
             };
         }
-        return null;
+
+        var kimiKey = FirstNonEmpty(
+            configuration["Kimi:ApiKey"],
+            configuration["KIMI_API_KEY"] ?? Environment.GetEnvironmentVariable("KIMI_API_KEY") ??
+                Environment.GetEnvironmentVariable("KIMI_API_KEY", EnvironmentVariableTarget.User));
+        if (string.IsNullOrWhiteSpace(kimiKey)) return null;
+        return new AiProvider
+        {
+            Name = "Kimi Code",
+            ProviderType = "kimi",
+            BaseUrl = configuration["Kimi:BaseUrl"] ?? "https://api.kimi.com/coding",
+            Model = configuration["Kimi:Model"] ?? "kimi-for-coding",
+            ApiFormat = configuration["Kimi:Api"] ?? "anthropic-messages",
+            EncryptedApiKey = SecretProtector.Protect(kimiKey, configuration)
+        };
     }
 
     private bool TryReadKey(AiProvider provider, out string key)

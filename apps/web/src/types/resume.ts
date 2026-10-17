@@ -89,6 +89,7 @@ export type TailoredResume = {
   warnings: string[]
   version: ResumeVersionDetail
   usedAi?: boolean
+  aiNotice?: string | null
 }
 
 export type ResumeScoreComponent = {

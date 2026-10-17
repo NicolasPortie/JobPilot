@@ -36,7 +36,7 @@ export function ResumeScoreCard({ draft, targetLabel, targetMeta, summary, score
               <p className="text-sm font-black text-[var(--jp-text-primary)]">Aderência estimada</p>
               <p className="mt-1 max-w-[150px] text-xs leading-5 text-[var(--jp-text-secondary)]">Ponto de partida para sua revisão, não uma garantia de entrevista.</p>
               {draft.usedAi === false && (
-                <p className="jp-badge jp-badge--amber mt-2" role="status" title="Ollama/Kimi indisponível — resultado determinístico">
+                <p className="jp-badge jp-badge--amber mt-2" role="status" title={draft.aiNotice ?? 'IA indisponível — resultado determinístico'}>
                   Sem IA — análise determinística
                 </p>
               )}

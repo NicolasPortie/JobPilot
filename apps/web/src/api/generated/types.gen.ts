@@ -398,6 +398,7 @@ export type TailoredResumeResponse = {
     warnings: Array<string>;
     version: ResumeVersionDetail;
     usedAi?: boolean;
+    aiNotice?: string | null;
 };
 
 export type TailorResumeRequest = {

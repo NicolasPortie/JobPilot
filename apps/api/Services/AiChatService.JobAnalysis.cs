@@ -229,6 +229,7 @@ public partial class AiChatService
             - Nao inclua o nome da empresa da vaga no titulo profissional, resumo, competencias ou qualquer outra linha do curriculo. O curriculo e direcionado para a vaga, mas nao deve dizer "Cargo | Empresa".
             - Nao invente anos, empresas, formacao, certificacoes, senioridade, idiomas ou tecnologias.
             - Preserve portugues do Brasil.
+            - Mantenha literalmente marcadores como [redacted-email-1] e [redacted-phone-2] na linha de contato; eles sao substituidos pelos dados reais depois.
             - Retorne apenas JSON valido no schema.
 
             Entrada:
@@ -275,6 +276,7 @@ public partial class AiChatService
             - Em EXPERIENCIA PROFISSIONAL e PROJETOS, prefira bullets com acao, tecnologia/contexto e resultado operacional quando houver evidencia no texto.
             - Para layout ats_compact, seja conciso. Para ats_standard, preserve mais evidencias e aceite ate duas paginas.
             - Preserve portugues do Brasil.
+            - Mantenha literalmente marcadores como [redacted-email-1] e [redacted-phone-2] na linha de contato; eles sao substituidos pelos dados reais depois.
             - Retorne apenas JSON valido no schema.
 
             Entrada:

@@ -17,4 +17,5 @@ public record TailoredResumeResponse(
     string[] Checkpoints,
     string[] Warnings,
     ResumeVersionDetail Version,
-    bool UsedAi = false);
+    bool UsedAi = false,
+    string? AiNotice = null);

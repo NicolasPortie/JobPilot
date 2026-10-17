@@ -600,6 +600,67 @@ public class ResumeTailoringServiceTests
     }
 
     [Fact]
+    public async Task TailorAsync_AvisaQuandoOTextoDaIaFoiDescartado()
+    {
+        var (db, userId, versionId, targetId) = await SeedTruthScenarioAsync();
+        await using var _ = db;
+        var invented = new TailoredResumeGenerationResponse(
+            "Ana Souza\nana@example.com\nAnalista de BI\n\nRESUMO PROFISSIONAL\nAnalista com experiência em SQL, Power BI e também em Terraform e Ansible para infraestrutura.\n\nCOMPETÊNCIAS\nSQL, Power BI, Terraform, Ansible\n\nEXPERIÊNCIA PROFISSIONAL\nAnalista - Acme | 2020 - 2023\n- Criou consultas em SQL.",
+            []);
+
+        var service = new ResumeTailoringService(db, TestServices.ResumeEvidenceMapService(db), new FakeAiChatService(invented));
+        var result = await service.TailorAsync(userId, new TailorResumeRequest(versionId, targetId, UseAi: true));
+
+        Assert.False(result.UsedAi);
+        Assert.NotNull(result.AiNotice);
+        Assert.Contains("descartado", result.AiNotice);
+        Assert.Contains("Terraform", result.AiNotice);
+        Assert.Contains(result.AiNotice, result.Warnings);
+    }
+
+    [Fact]
+    public async Task TailorAsync_AvisaQuandoAIaNaoResponde()
+    {
+        var (db, userId, versionId, targetId) = await SeedTruthScenarioAsync();
+        await using var _ = db;
+
+        var service = new ResumeTailoringService(db, TestServices.ResumeEvidenceMapService(db), new FakeAiChatService(null));
+        var result = await service.TailorAsync(userId, new TailorResumeRequest(versionId, targetId, UseAi: true));
+
+        Assert.False(result.UsedAi);
+        Assert.Contains("não respondeu", result.AiNotice);
+    }
+
+    [Fact]
+    public async Task TailorAsync_SemIaPedida_NaoGeraAviso()
+    {
+        var (db, userId, versionId, targetId) = await SeedTruthScenarioAsync();
+        await using var _ = db;
+
+        var service = new ResumeTailoringService(db, TestServices.ResumeEvidenceMapService(db), new FakeAiChatService(null));
+        var result = await service.TailorAsync(userId, new TailorResumeRequest(versionId, targetId, UseAi: false));
+
+        Assert.Null(result.AiNotice);
+    }
+
+    [Fact]
+    public async Task TailorAsync_DescartaTextoDaIaSemOEmailDoCabecalho()
+    {
+        var (db, userId, versionId, targetId) = await SeedTruthScenarioAsync();
+        await using var _ = db;
+        var semContato = new TailoredResumeGenerationResponse(
+            "Ana Souza\nAnalista de BI\n\nRESUMO PROFISSIONAL\nAnalista com experiência em SQL e Power BI, criando consultas e painéis de indicadores.\n\nCOMPETÊNCIAS\nSQL, Power BI\n\nEXPERIÊNCIA PROFISSIONAL\nAnalista - Acme | 2020 - 2023\n- Criou consultas em SQL.",
+            []);
+
+        var service = new ResumeTailoringService(db, TestServices.ResumeEvidenceMapService(db), new FakeAiChatService(semContato));
+        var result = await service.TailorAsync(userId, new TailorResumeRequest(versionId, targetId, UseAi: true));
+
+        Assert.False(result.UsedAi);
+        Assert.Contains("e-mail", result.AiNotice);
+        Assert.Contains("ana@example.com", result.PlainText);
+    }
+
+    [Fact]
     public async Task TailorAsync_ReconheceApelidoDeTecnologiaComoEvidencia()
     {
         var (db, userId, versionId, targetId) = await SeedTruthScenarioAsync();

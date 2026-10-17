@@ -87,7 +87,7 @@ dotnet user-secrets set "Ai:Provider" "anthropic" --project apps\api   # ou open
 dotnet user-secrets set "Ai:ApiKey" "<sua-chave>" --project apps\api
 ```
 
-Também vale a configuração antiga `Kimi:ApiKey`/`KIMI_API_KEY`. O controle "Usar IA" da tela mostra se o provedor está respondendo; sem IA, o JobPilot gera o currículo de forma determinística, sem inventar conteúdo. Texto da IA é descartado se citar tecnologia que não está no seu currículo.
+`Ai:Provider` + `Ai:ApiKey` vencem a configuração antiga `Kimi:ApiKey`/`KIMI_API_KEY`, que só vale quando `Ai:*` não está definido. E-mail e telefone não vão no prompt da IA: são trocados por marcadores e restaurados na resposta. Se o texto da IA for descartado (tecnologia sem evidência, contato sumido ou IA fora do ar), a tela diz o motivo e o currículo sai sem IA. O controle "Usar IA" da tela mostra se o provedor está respondendo; sem IA, o JobPilot gera o currículo de forma determinística, sem inventar conteúdo. Texto da IA é descartado se citar tecnologia que não está no seu currículo.
 
 `Security:SecretKey` é independente da chave JWT. O runtime legado fica desligado por padrão (`Features:EnableLegacyRuntime=false`) e não deve ser ativado em uma instalação de produção.
 

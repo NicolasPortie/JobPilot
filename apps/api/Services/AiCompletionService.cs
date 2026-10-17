@@ -26,15 +26,17 @@ public sealed partial class AiCompletionService(HttpClient http, IConfiguration 
         try
         {
             AiProviderEndpointPolicy.Validate(provider, configuration);
-            system = redaction.RedactPii(Truncate(system));
-            prompt = redaction.RedactPii(Truncate(prompt));
+            // Contatos saem do prompt, mas voltam no texto da IA (cabeçalho do currículo).
+            var restore = new Dictionary<string, string>();
+            system = redaction.RedactPii(Truncate(system), restore);
+            prompt = redaction.RedactPii(Truncate(prompt), restore);
             attachments ??= [];
             string? text;
             if (provider.ApiFormat == "ollama-chat" || provider.ProviderType == "ollama")
             {
                 text = await CompleteOllamaChatAsync(provider, system, prompt, format);
                 await RecordEstimatedUsageAsync(userId, provider, operation, system, prompt, text);
-                return ReportOutcome(userId, provider, text);
+                return ReportOutcome(userId, provider, text, restore);
             }
 
             var apiKey = SecretProtector.Unprotect(provider.EncryptedApiKey, configuration);
@@ -48,11 +50,11 @@ public sealed partial class AiCompletionService(HttpClient http, IConfiguration 
             {
                 text = await CompleteAnthropicMessagesAsync(provider, apiKey, system, prompt);
                 await RecordEstimatedUsageAsync(userId, provider, operation, system, prompt, text);
-                return ReportOutcome(userId, provider, text);
+                return ReportOutcome(userId, provider, text, restore);
             }
             if (provider.ApiFormat == "openai-responses")
-                return ReportOutcome(userId, provider, await CompleteOpenAiResponsesAsync(provider, userId, operation, apiKey, system, prompt, format, attachments));
-            return ReportOutcome(userId, provider, await CompleteOpenAiCompatibleAsync(provider, userId, operation, apiKey, system, prompt, format));
+                return ReportOutcome(userId, provider, await CompleteOpenAiResponsesAsync(provider, userId, operation, apiKey, system, prompt, format, attachments), restore);
+            return ReportOutcome(userId, provider, await CompleteOpenAiCompatibleAsync(provider, userId, operation, apiKey, system, prompt, format), restore);
         }
         catch (Exception ex)
         {
@@ -62,13 +64,13 @@ public sealed partial class AiCompletionService(HttpClient http, IConfiguration 
         }
     }
 
-    private string? ReportOutcome(Guid userId, AiProvider provider, string? text)
+    private string? ReportOutcome(Guid userId, AiProvider provider, string? text, IReadOnlyDictionary<string, string> restore)
     {
         if (string.IsNullOrWhiteSpace(text))
             health?.RecordFailure(userId, HealthIdentity(provider), "O provedor não retornou texto.");
         else
             health?.RecordSuccess(userId, HealthIdentity(provider));
-        return text;
+        return redaction.Restore(text, restore);
     }
 
     private static string Truncate(string value) =>

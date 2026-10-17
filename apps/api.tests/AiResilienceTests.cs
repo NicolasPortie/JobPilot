@@ -25,6 +25,60 @@ public sealed class AiResilienceTests
     }
 
     [Fact]
+    public void RedactPii_KeepsYearRangesInResumes()
+    {
+        var redaction = new TraceRedactionService();
+        var result = redaction.RedactPii("Analista | 2019-2023 | Acme\nDev 2015 2018\nfone (11) 98888-7777");
+
+        Assert.Contains("2019-2023", result);
+        Assert.Contains("2015 2018", result);
+        Assert.DoesNotContain("98888-7777", result);
+    }
+
+    [Fact]
+    public async Task Completion_SendsContactsAsPlaceholders_AndRestoresThemInTheAnswer()
+    {
+        await using var db = CreateDb();
+        var handler = new StaticHandler(HttpStatusCode.OK,
+            "{\"message\":{\"role\":\"assistant\",\"content\":\"Ana\\n[redacted-email-1] | [redacted-phone-2]\\nAnalista 2019-2023\"}}");
+        var service = new AiCompletionService(
+            new HttpClient(handler),
+            new ConfigurationBuilder().Build(),
+            db,
+            NullLogger<AiCompletionService>.Instance,
+            new TraceRedactionService());
+        var provider = new AiProvider
+        {
+            Id = Guid.NewGuid(),
+            Name = "Ollama Test",
+            ProviderType = "ollama",
+            BaseUrl = "http://localhost:11434",
+            Model = "qwen3:4b-instruct",
+            ApiFormat = "ollama-chat",
+        };
+
+        var result = await service.CompleteTextWithProviderAsync(provider, Guid.NewGuid(), "test", "system",
+            "Ana ana@example.com (11) 98888-7777 Analista 2019-2023");
+
+        Assert.NotNull(handler.LastBody);
+        Assert.DoesNotContain("ana@example.com", handler.LastBody);
+        Assert.DoesNotContain("98888-7777", handler.LastBody);
+        Assert.Contains("2019-2023", handler.LastBody);
+        Assert.Contains("ana@example.com | (11) 98888-7777", result);
+    }
+
+    [Fact]
+    public void Restore_ReusesPlaceholderForRepeatedContact()
+    {
+        var redaction = new TraceRedactionService();
+        var map = new Dictionary<string, string>();
+        var text = redaction.RedactPii("ana@example.com e de novo ana@example.com, outro b@example.com", map);
+
+        Assert.Equal(2, map.Count);
+        Assert.Equal("ana@example.com e de novo ana@example.com, outro b@example.com", redaction.Restore(text, map));
+    }
+
+    [Fact]
     public async Task TransientFailure_RetriesOnce_AndRedactsPrompt()
     {
         await using var db = CreateDb();
@@ -132,7 +186,7 @@ public sealed class AiResilienceTests
     [Theory]
     [InlineData("Kimi:ApiKey")]
     [InlineData("KIMI_API_KEY")]
-    public async Task LocalKimiKey_TakesPrecedenceOverReadableSavedAndGenericKey(string keySetting)
+    public async Task GenericAiKey_TakesPrecedenceOverLegacyKimiKey(string keySetting)
     {
         await using var db = CreateDb();
         var userId = Guid.NewGuid();
@@ -143,6 +197,38 @@ public sealed class AiResilienceTests
             [keySetting] = "local-test-key",
             ["Ai:Provider"] = "anthropic",
             ["Ai:ApiKey"] = "generic-test-key"
+        }).Build();
+        db.AiProviders.Add(new AiProvider
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Name = "Saved",
+            ProviderType = "anthropic",
+            BaseUrl = "https://api.anthropic.com",
+            Model = "saved-model",
+            IsActive = true,
+            IsDefault = true,
+            EncryptedApiKey = SecretProtector.Protect("saved-test-key", config)
+        });
+        await db.SaveChangesAsync();
+        var service = new AiCompletionService(new HttpClient(), config, db, NullLogger<AiCompletionService>.Instance, new TraceRedactionService());
+        var resolved = await service.ResolveProviderAsync(userId);
+        Assert.Equal("anthropic", resolved.ProviderType);
+        Assert.Equal("generic-test-key", SecretProtector.Unprotect(resolved.EncryptedApiKey, config));
+    }
+
+    [Theory]
+    [InlineData("Kimi:ApiKey")]
+    [InlineData("KIMI_API_KEY")]
+    public async Task LegacyKimiKey_StillWinsOverSavedProvider_WhenGenericKeyIsAbsent(string keySetting)
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Security:SecretKey"] = "test-secret-key-with-more-than-thirty-two-characters",
+            ["KIMI_API_KEY"] = "",
+            [keySetting] = "local-test-key"
         }).Build();
         db.AiProviders.Add(new AiProvider
         {

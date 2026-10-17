@@ -44,9 +44,10 @@ public sealed class ResumeTailoringService(JobPilotDbContext db, ResumeEvidenceM
         var warnings = ResumeTailoringAnalyzer.BuildWarnings(evidenceMap, analysis);
         var tailoredModel = ResumeTailoringAnalyzer.BuildTailoredModel(profile, baseVersion, target, analysis);
         var deterministicDraft = ResumeComposer.Render(tailoredModel, layout);
-        var aiResult = request.UseAi
+        var attempt = request.UseAi
             ? await TryGenerateWithAiAsync(userId, profile, baseVersion, target, evidenceMap, analysis, deterministicDraft, layout)
-            : null;
+            : AiAttempt.NotRequested;
+        var aiResult = attempt.Result;
         var plainText = ResumeTailoringAnalyzer.SanitizeFinalPlainText(aiResult?.PlainText ?? deterministicDraft, target);
         // Com texto de IA, as seções estruturadas acompanham o que a IA escreveu.
         if (aiResult is not null) tailoredModel = ResumeTailoringAnalyzer.ModelFromText(plainText, tailoredModel);
@@ -56,6 +57,7 @@ public sealed class ResumeTailoringService(JobPilotDbContext db, ResumeEvidenceM
         var reviewQuestions = ResumeTailoringAnalyzer.BuildReviewQuestions(evidenceMap);
         if (aiResult is not null)
             warnings = warnings.Concat(aiResult.Warnings).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (attempt.Notice is not null) warnings = warnings.Append(attempt.Notice).ToArray();
         var now = DateTimeOffset.UtcNow;
 
         var tailored = new ResumeVersion
@@ -143,7 +145,8 @@ public sealed class ResumeTailoringService(JobPilotDbContext db, ResumeEvidenceM
             analysis.Checkpoints,
             warnings,
             ResumeTailoringAnalyzer.ToVersionDetail(tailored),
-            aiResult is not null);
+            aiResult is not null,
+            attempt.Notice);
     }
 
     public async Task<TailoredResumeResponse> BuildGenericAtsAsync(Guid userId, BuildGenericAtsResumeRequest request)
@@ -159,9 +162,10 @@ public sealed class ResumeTailoringService(JobPilotDbContext db, ResumeEvidenceM
         var profile = await db.CandidateProfiles.FirstOrDefaultAsync(x => x.UserId == userId);
 
         var deterministicDraft = ResumeDraftBuilder.BuildGenericAtsPlainText(profile, baseVersion, layout);
-        var aiResult = request.UseAi
+        var attempt = request.UseAi
             ? await TryGenerateGenericAtsWithAiAsync(userId, profile, baseVersion, deterministicDraft, layout)
-            : null;
+            : AiAttempt.NotRequested;
+        var aiResult = attempt.Result;
         var plainText = ResumeTailoringAnalyzer.SanitizeFinalPlainText(aiResult?.PlainText ?? deterministicDraft);
         if (string.IsNullOrWhiteSpace(plainText) || plainText.Length < 120)
             throw new InvalidOperationException("Currículo base sem conteúdo suficiente para gerar uma versão ATS.");
@@ -187,6 +191,7 @@ public sealed class ResumeTailoringService(JobPilotDbContext db, ResumeEvidenceM
         var warnings = ResumeDraftBuilder.BuildGenericWarnings(plainText, baseVersion.Sections);
         if (aiResult is not null)
             warnings = warnings.Concat(aiResult.Warnings).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (attempt.Notice is not null) warnings = warnings.Append(attempt.Notice).ToArray();
         var generation = aiResult is null ? "backend-deterministic" : "ai-structured";
         atsVersion.AtsReportJson = JsonSerializer.Serialize(new
         {
@@ -248,10 +253,11 @@ public sealed class ResumeTailoringService(JobPilotDbContext db, ResumeEvidenceM
             [],
             warnings,
             ResumeTailoringAnalyzer.ToVersionDetail(atsVersion),
-            aiResult is not null);
+            aiResult is not null,
+            attempt.Notice);
     }
 
-    private async Task<TailoredResumeGenerationResponse?> TryGenerateWithAiAsync(
+    private async Task<AiAttempt> TryGenerateWithAiAsync(
         Guid userId,
         CandidateProfile? profile,
         ResumeVersion baseVersion,
@@ -283,27 +289,23 @@ public sealed class ResumeTailoringService(JobPilotDbContext db, ResumeEvidenceM
                 analysis.AdjacentKeywords,
                 analysis.ExcludedKeywords,
                 analysis.Checkpoints));
-            if (response is null) return null;
+            if (response is null) return AiAttempt.Unavailable;
 
             var validationWarnings = ResumeTailoringAnalyzer.ValidateAiDraft(
-                response.PlainText,
-                analysis,
-                string.Join("\n", baseVersion.PlainText, string.Join(", ", profile?.Skills ?? []), profile?.ProfessionalSummary ?? ""));
-            if (validationWarnings.Any(x => x.StartsWith("IA rejeitada:", StringComparison.OrdinalIgnoreCase)))
-                return null;
-
-            return response with
-            {
-                Warnings = response.Warnings.Concat(validationWarnings).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
-            };
+                    response.PlainText,
+                    analysis,
+                    string.Join("\n", baseVersion.PlainText, string.Join(", ", profile?.Skills ?? []), profile?.ProfessionalSummary ?? ""))
+                .Concat(ContactWarnings(response.PlainText, profile))
+                .ToArray();
+            return AiAttempt.From(response, validationWarnings);
         }
         catch
         {
-            return null;
+            return AiAttempt.Unavailable;
         }
     }
 
-    private async Task<TailoredResumeGenerationResponse?> TryGenerateGenericAtsWithAiAsync(
+    private async Task<AiAttempt> TryGenerateGenericAtsWithAiAsync(
         Guid userId,
         CandidateProfile? profile,
         ResumeVersion baseVersion,
@@ -328,20 +330,46 @@ public sealed class ResumeTailoringService(JobPilotDbContext db, ResumeEvidenceM
                 [],
                 [],
                 []));
-            if (response is null) return null;
+            if (response is null) return AiAttempt.Unavailable;
 
-            var validationWarnings = ValidateGenericAiDraft(response.PlainText, deterministicDraft, skills);
-            if (validationWarnings.Any(x => x.StartsWith("IA rejeitada:", StringComparison.OrdinalIgnoreCase)))
-                return null;
-
-            return response with
-            {
-                Warnings = response.Warnings.Concat(validationWarnings).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
-            };
+            var validationWarnings = ValidateGenericAiDraft(response.PlainText, deterministicDraft, skills)
+                .Concat(ContactWarnings(response.PlainText, profile))
+                .ToArray();
+            return AiAttempt.From(response, validationWarnings);
         }
         catch
         {
-            return null;
+            return AiAttempt.Unavailable;
+        }
+    }
+
+    private const string RejectedPrefix = "IA rejeitada:";
+
+    /// <summary>O e-mail do perfil precisa continuar no cabeçalho escrito pela IA.</summary>
+    private static IEnumerable<string> ContactWarnings(string aiDraft, CandidateProfile? profile)
+    {
+        if (!string.IsNullOrWhiteSpace(profile?.Email) && !aiDraft.Contains(profile.Email.Trim(), StringComparison.OrdinalIgnoreCase))
+            yield return $"{RejectedPrefix} o e-mail do cabeçalho sumiu.";
+    }
+
+    /// <summary>Resultado de uma tentativa de usar IA: texto aceito ou o motivo de ter voltado ao modo sem IA.</summary>
+    private sealed record AiAttempt(TailoredResumeGenerationResponse? Result, string? Notice)
+    {
+        public static readonly AiAttempt NotRequested = new(null, null);
+        public static readonly AiAttempt Unavailable = new(null, "A IA não respondeu; o currículo foi gerado sem IA.");
+
+        public static AiAttempt From(TailoredResumeGenerationResponse response, string[] validationWarnings)
+        {
+            var rejections = validationWarnings
+                .Where(x => x.StartsWith(RejectedPrefix, StringComparison.OrdinalIgnoreCase))
+                .Select(x => x[RejectedPrefix.Length..].Trim().TrimEnd('.'))
+                .ToArray();
+            if (rejections.Length > 0)
+                return new(null, $"O texto da IA foi descartado ({string.Join("; ", rejections)}); o currículo foi gerado sem IA.");
+            return new(response with
+            {
+                Warnings = response.Warnings.Concat(validationWarnings).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
+            }, null);
         }
     }
 

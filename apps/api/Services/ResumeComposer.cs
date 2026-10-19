@@ -38,7 +38,6 @@ internal static class ResumeComposer
         "summary", "skills", "experience", "projects", "education", "certifications", "languages"
     };
 
-    // ───────────────────────── renderização ─────────────────────────
 
     public static string Render(ResumeModel model, string layout)
     {
@@ -103,7 +102,6 @@ internal static class ResumeComposer
     public static bool HasStructuredContent(IEnumerable<ResumeSection> sections) =>
         sections.Any(x => StructuredTypes.Contains(x.SectionType));
 
-    // ───────────────────────── modelo ↔ versão ─────────────────────────
 
     public static ResumeModel FromParsed(ParsedResume parsed, string summary, string[] skills, string contactLine, string linksLine, string fullName) =>
         new(fullName, parsed.Headline, contactLine, linksLine, summary, skills,
@@ -192,7 +190,6 @@ internal static class ResumeComposer
         if (items.Count > 0) Add(sections, userId, versionId, type, title, order, new { items });
     }
 
-    // ───────────────────────── blocos ─────────────────────────
 
     private sealed record Limits(int Summary, int Skills, int Experience, int Projects, int ExperienceBullets, int ProjectBullets)
     {
@@ -271,7 +268,6 @@ internal static class ResumeComposer
         return items;
     }
 
-    // ───────────────────────── títulos de item ─────────────────────────
 
     private static string ExperienceHeading(Dictionary<string, string> item)
     {

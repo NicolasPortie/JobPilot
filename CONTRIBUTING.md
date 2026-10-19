@@ -47,6 +47,5 @@ build output, local documents, credentials, tokens, screenshots, or logs.
 - `apps/agent`: legado em quarentena — runtime de automação desativado (`410 Gone`, `Features:EnableLegacyRuntime=false`). Não participa do fluxo web; mantido só para migração/testes históricos.
 - `apps/web`: user interface organized by feature.
 - `docs`: current product and engineering documentation.
-- `docs/archive`: historical audits and superseded plans.
 
 New behavior should include focused tests at the closest useful boundary.

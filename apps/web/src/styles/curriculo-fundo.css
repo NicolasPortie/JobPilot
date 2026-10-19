@@ -1,8 +1,7 @@
 /* ==========================================================================
-   JobPilot — Currículo / Adaptação por vaga (fundo — Etapa 2 img-to-html)
-   Tema warm cream/peach/terracota amostrado da referência.
-   Escopo desta etapa: TOKENS + FUNDO da página. Sem navbar, cards ou conteúdo.
-   As ondas da sidebar e a foto do banner entram com o chrome (Etapa 3).
+   JobPilot — Currículo / Adaptação por vaga (fundo)
+   Tema creme/pêssego/terracota.
+   Tokens e fundo da página.
    ========================================================================== */
 
 :root {
@@ -36,7 +35,7 @@
   --cv-green-ink: #1f7a44;
   --cv-green-bg: #e9f6ee;
 
-  /* Tipografia (famílias definidas na Etapa 3, antes do ajuste fino) */
+  /* Tipografia */
   --cv-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
   --cv-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
 

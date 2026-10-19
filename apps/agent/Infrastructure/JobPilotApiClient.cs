@@ -16,7 +16,6 @@ public sealed class JobPilotApiClient : IDisposable
         _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
     }
 
-    // ── Discovery ──
     public async Task PostDiscoveredAsync(IEnumerable<DiscoveredJobDto> jobs)
     {
         var response = await _http.PostAsJsonAsync("api/agent/jobs/discovered", new { jobs }, JsonOptions);
@@ -30,7 +29,6 @@ public sealed class JobPilotApiClient : IDisposable
         return await response.Content.ReadFromJsonAsync<JobFilter>(JsonOptions);
     }
 
-    // ── Tasks / Queue ──
     public async Task<AgentTaskResponse?> GetNextTaskAsync()
     {
         var response = await _http.GetAsync("api/agent/tasks/next");
@@ -74,7 +72,6 @@ public sealed class JobPilotApiClient : IDisposable
         response.EnsureSuccessStatusCode();
     }
 
-    // ── Profile ──
     public async Task SetApplySurfaceAsync(Guid taskId, ApplySurfaceRequest request)
     {
         var response = await _http.PatchAsJsonAsync($"api/agent/tasks/{taskId}/apply-surface", request, JsonOptions);
@@ -88,7 +85,6 @@ public sealed class JobPilotApiClient : IDisposable
         return await response.Content.ReadFromJsonAsync<ProfileValidationResult>(JsonOptions);
     }
 
-    // ── Platform Credentials ──
     public async Task<List<PlatformCredential>?> GetPlatformCredentialsAsync()
     {
         var response = await _http.GetAsync("api/agent/platform-credentials");
@@ -101,7 +97,6 @@ public sealed class JobPilotApiClient : IDisposable
         return await response.Content.ReadFromJsonAsync<List<PlatformCredential>>(JsonOptions) ?? [];
     }
 
-    // ── LLM Decision Endpoints ──
     public async Task<BrowserActionPlanResponse?> PlanBrowserActionAsync(BrowserActionPlanRequest request)
     {
         try
@@ -135,7 +130,6 @@ public sealed class JobPilotApiClient : IDisposable
         catch { return null; }
     }
 
-    // ── Answers / Patterns ──
     public async Task<ResolvedAnswer?> ResolveAnswerAsync(string questionText, string? jobContext)
     {
         var response = await _http.PostAsJsonAsync("api/question-patterns/resolve", new { questionText, jobContext }, JsonOptions);
@@ -151,7 +145,6 @@ public sealed class JobPilotApiClient : IDisposable
         return draft?.Text;
     }
 
-    // ── Telemetry / Events ──
     public async Task EventAsync(Guid? taskId, string eventType, string detail)
     {
         var response = await _http.PostAsJsonAsync("api/agent/events", new { applicationJobId = taskId, eventType, detail }, JsonOptions);
@@ -205,7 +198,6 @@ public sealed class JobPilotApiClient : IDisposable
         response.EnsureSuccessStatusCode();
     }
 
-    // ── Checkpoints ──
     public async Task<List<AgentLearning>> GetActiveLearningsAsync()
     {
         try
@@ -272,7 +264,6 @@ public sealed class JobPilotApiClient : IDisposable
         response.EnsureSuccessStatusCode();
     }
 
-    // ── Policy ──
     public async Task<AgentPolicy?> GetPolicyAsync()
     {
         try
@@ -284,7 +275,6 @@ public sealed class JobPilotApiClient : IDisposable
         catch { return null; }
     }
 
-    // ── Patterns & Answers (batch download for local resolver) ──
     public async Task<List<QuestionPattern>> GetQuestionPatternsAsync()
     {
         try

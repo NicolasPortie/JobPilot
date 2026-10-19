@@ -165,7 +165,6 @@ internal static partial class ResumeStructureParser
             experience, projects, education, certifications, languages);
     }
 
-    // ───────────────────────── texto → linhas ─────────────────────────
 
     private static List<string> ToLines(string? rawText)
     {
@@ -203,7 +202,6 @@ internal static partial class ResumeStructureParser
 
     private static string StripBullet(string line) => BulletRegex().Replace(line, "").Trim();
 
-    // ───────────────────────── títulos ─────────────────────────
 
     private static bool IsHeading(string line)
     {
@@ -225,7 +223,6 @@ internal static partial class ResumeStructureParser
         return Regex.Replace(sb.ToString(), @"\s+", " ").Trim();
     }
 
-    // ───────────────────────── cabeçalho ─────────────────────────
 
     private static (string FullName, string Headline) ParseHeader(string[] header)
     {
@@ -247,7 +244,6 @@ internal static partial class ResumeStructureParser
         Regex.IsMatch(line, @"\d{4,}") ||
         Regex.IsMatch(line, @"(?i)linkedin|github|portf[oó]lio|https?://");
 
-    // ───────────────────────── agrupamento de linhas ─────────────────────────
 
     /// <summary>Junta linhas quebradas pelo layout do PDF em itens lógicos (um por bullet).</summary>
     private static List<string> LogicalLines(List<string> body)
@@ -265,7 +261,6 @@ internal static partial class ResumeStructureParser
         return result;
     }
 
-    // ───────────────────────── competências ─────────────────────────
 
     private static IEnumerable<string> ParseSkills(List<string> body)
     {
@@ -299,7 +294,6 @@ internal static partial class ResumeStructureParser
     private static IEnumerable<string> SplitOutsideParentheses(string text, string separatorPattern) =>
         Regex.Split(text, $@"{separatorPattern}(?![^()]*\))").Select(part => part.Trim()).Where(part => part.Length > 0);
 
-    // ───────────────────────── experiência ─────────────────────────
 
     private sealed class Entry
     {
@@ -423,7 +417,6 @@ internal static partial class ResumeStructureParser
         else if (entry.Role.Length == 0) entry.Role = text;
     }
 
-    // ───────────────────────── projetos ─────────────────────────
 
     private static List<Dictionary<string, string>> ParseProjects(List<string> body)
     {
@@ -462,7 +455,6 @@ internal static partial class ResumeStructureParser
             .ToList();
     }
 
-    // ───────────────────────── formação, certificações, idiomas ─────────────────────────
 
     private static void ParseEducationBlock(
         List<string> body,

@@ -18,8 +18,6 @@ infra/.env.production
 .build/
 artifacts/
 logs/
-codex_*.json
-codex_agent_messages.txt
 dashboard-qa.png
 tmp-*.png
 debug-filter.cs
@@ -31,5 +29,4 @@ apps/agent/.jobpilot-profile/
 # Artefatos locais de testes e ferramentas
 TestResults/
 .playwright-cli/
-.codex/
 .tmp/

@@ -312,7 +312,6 @@ internal static class JobTargetAnalyzer
         else if (textLength < 300 && !isStructured)
             score -= 0.03m;
 
-        // ─── Floor boosts (guaranteed minimums) ───
 
         // Base floor: structured text with title, 5+ reqs, 80%+ evidence
         if (!string.IsNullOrWhiteSpace(title) && requirements.Length >= 5 && evidenceRatio >= 0.8m && isStructured)

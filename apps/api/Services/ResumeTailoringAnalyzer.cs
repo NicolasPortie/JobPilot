@@ -108,7 +108,6 @@ internal static partial class ResumeTailoringAnalyzer
         return warnings.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
-    // ───────────────────────── currículo adaptado ─────────────────────────
 
     /// <summary>
     /// Currículo da vaga a partir da versão base: mesmo conteúdo, com título alinhado à vaga,
@@ -217,7 +216,6 @@ internal static partial class ResumeTailoringAnalyzer
         }
     }
 
-    // ───────────────────────── limpeza do texto final ─────────────────────────
 
     public static string SanitizeFinalPlainText(string plainText, JobTarget? target = null)
     {

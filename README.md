@@ -42,7 +42,7 @@ O Docker sobe apenas o PostgreSQL. A API e a web são iniciadas separadamente.
 O atalho recomendado cuida de segredos, senha do Postgres e health-checks:
 
 ```powershell
-cd C:\Projetos\JobPilot
+cd JobPilot
 .\scripts\start-mvp.ps1
 ```
 
@@ -125,3 +125,7 @@ npm run check
 ```
 
 Consulte `docs/README.md`, `docs/ARCHITECTURE.md`, `docs/REESTRUTURACAO_PRODUTO.md` e `SECURITY.md` para a decisão de produto, limites e plano de migração.
+
+## Licença
+
+MIT. Veja [LICENSE](LICENSE).

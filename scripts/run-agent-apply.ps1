@@ -14,7 +14,7 @@ $maxApplications = [Environment]::GetEnvironmentVariable("JOBPILOT_MAX_APPLICATI
 $browserDriver = [Environment]::GetEnvironmentVariable("JOBPILOT_BROWSER_DRIVER", "User")
 
 if ([string]::IsNullOrWhiteSpace($token)) {
-  throw "JOBPILOT_AGENT_TOKEN is not configured. Pair the agent in the web app or ask Codex to configure it again."
+  throw "JOBPILOT_AGENT_TOKEN is not configured. Pair the agent in the web app."
 }
 
 if ([string]::IsNullOrWhiteSpace($apiUrl)) {

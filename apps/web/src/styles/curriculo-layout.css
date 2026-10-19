@@ -1,7 +1,6 @@
 /* ==========================================================================
    JobPilot — Currículo / Adaptação por vaga — ESTRUTURA E COMPONENTES
-   Etapa 3 img-to-html (modo compacto: a tela deve caber sem scroll em
-   viewports com altura >= ~900px — a própria referência tem ~950px).
+   Modo compacto: a tela deve caber sem scroll em viewports com altura >= ~900px.
    Tudo escopado sob body.cv-fundo (só aba Currículo).
    ========================================================================== */
 
@@ -299,7 +298,7 @@ body.cv-fundo .jp-topbar {
   overflow: hidden;
 }
 
-/* ilustração SVG própria (Etapa 4); a foto real entra aqui quando houver crop */
+/* ilustração SVG própria */
 .cv-topbanner__photo {
   margin-left: auto;
   align-self: stretch;

@@ -18,12 +18,10 @@ public sealed class SemanticFieldResolver
     /// </summary>
     public FieldResolution Resolve(ElementCandidate field, CandidateProfile profile, SessionContext ctx, List<ReusableAnswer> answers, List<QuestionPattern> patterns, string jobContext)
     {
-        // 1. Reusable answers (prioridade máxima — usuário definiu explicitamente)
         var reusable = TryReusableAnswer(field, answers);
         if (reusable is not null)
             return new FieldResolution(reusable, SemanticFieldType.FreeText, 0.95m, "reusable-answer", true);
 
-        // 2. Semantic profile mapping (o coração da inteligência)
         var semanticValue = _mapper.Map(field, profile, ctx, answers);
         if (semanticValue is not null)
         {
@@ -33,12 +31,10 @@ public sealed class SemanticFieldResolver
                 $"semantic-inference:{inferredType}:conf={confidence:0.00}", confidence >= 0.5m);
         }
 
-        // 3. Question patterns (fallback)
         var patternValue = TryPattern(field, patterns, profile, answers);
         if (patternValue is not null)
             return new FieldResolution(patternValue, SemanticFieldType.Unknown, 0.6m, "question-pattern", true);
 
-        // 4. Fallback keyword matching (último recurso)
         var keywordValue = FormFiller.ResolveValue(field.Label, profile, answers);
         if (!string.IsNullOrWhiteSpace(keywordValue))
             return new FieldResolution(keywordValue, SemanticFieldType.Unknown, 0.4m, "keyword-fallback", false);

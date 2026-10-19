@@ -55,20 +55,17 @@ public sealed class LocalAnswerResolver
     {
         var normalized = questionText.ToLowerInvariant();
 
-        // 1. Reusable answers
         var answer = _answers.FirstOrDefault(x =>
             normalized.Contains(x.QuestionKey.ToLowerInvariant()) ||
             normalized.Contains(x.QuestionText.ToLowerInvariant()));
         if (answer is not null) return answer.AnswerValue;
 
-        // 2. Profile fields
         if (_profile is not null)
         {
             var profileValue = FormFiller.ResolveValue(questionText, _profile, _answers);
             if (!string.IsNullOrWhiteSpace(profileValue)) return profileValue;
         }
 
-        // 3. Question patterns
         foreach (var pattern in _patterns)
         {
             var templates = pattern.QuestionTemplates;

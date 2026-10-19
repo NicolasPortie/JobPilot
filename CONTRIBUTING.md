@@ -44,7 +44,6 @@ build output, local documents, credentials, tokens, screenshots, or logs.
 ## Project Boundaries
 
 - `apps/api`: HTTP boundary, persistence, and backend business services.
-- `apps/agent`: legado em quarentena — runtime de automação desativado (`410 Gone`, `Features:EnableLegacyRuntime=false`). Não participa do fluxo web; mantido só para migração/testes históricos.
 - `apps/web`: user interface organized by feature.
 - `docs`: current product and engineering documentation.
 

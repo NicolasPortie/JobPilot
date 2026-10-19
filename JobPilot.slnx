@@ -1,11 +1,5 @@
 <Solution>
   <Folder Name="/apps/" />
-  <Folder Name="/apps/agent.tests/">
-    <Project Path="apps/agent.tests/JobPilot.Agent.Tests.csproj" />
-  </Folder>
-  <Folder Name="/apps/agent/">
-    <Project Path="apps/agent/JobPilot.Agent.csproj" />
-  </Folder>
   <Folder Name="/apps/api.tests/">
     <Project Path="apps/api.tests/JobPilot.Api.Tests.csproj" />
   </Folder>

@@ -33,7 +33,7 @@ public sealed class AuthenticationServiceTests
             })
             .Build();
         var tokens = TestServices.JwtTokenService(db, config);
-        var service = new AuthenticationService(users, TestServices.Repo<RefreshToken>(db), tokens, TestServices.Uow(db), config);
+        var service = new AuthenticationService(users, TestServices.Repo<RefreshToken>(db), tokens, TestServices.Uow(db));
 
         var result = await service.LoginAsync(new LoginRequest("user@example.com", password));
 
@@ -64,7 +64,7 @@ public sealed class AuthenticationServiceTests
             })
             .Build();
         var tokens = TestServices.JwtTokenService(db, config);
-        var service = new AuthenticationService(users, TestServices.Repo<RefreshToken>(db), tokens, TestServices.Uow(db), config);
+        var service = new AuthenticationService(users, TestServices.Repo<RefreshToken>(db), tokens, TestServices.Uow(db));
 
         var result = await service.LoginAsync(new LoginRequest(" USER@EXAMPLE.COM ", password));
 
@@ -84,7 +84,7 @@ public sealed class AuthenticationServiceTests
             })
             .Build();
         var tokens = TestServices.JwtTokenService(db, config);
-        var service = new AuthenticationService(users, TestServices.Repo<RefreshToken>(db), tokens, TestServices.Uow(db), config);
+        var service = new AuthenticationService(users, TestServices.Repo<RefreshToken>(db), tokens, TestServices.Uow(db));
 
         var result = await service.LoginAsync(new LoginRequest("unknown@example.com", "any-password"));
 
@@ -112,7 +112,7 @@ public sealed class AuthenticationServiceTests
             })
             .Build();
         var tokens = TestServices.JwtTokenService(db, config);
-        var service = new AuthenticationService(users, TestServices.Repo<RefreshToken>(db), tokens, TestServices.Uow(db), config);
+        var service = new AuthenticationService(users, TestServices.Repo<RefreshToken>(db), tokens, TestServices.Uow(db));
 
         var result = await service.LoginAsync(new LoginRequest("user@example.com", "wrong-password"));
 

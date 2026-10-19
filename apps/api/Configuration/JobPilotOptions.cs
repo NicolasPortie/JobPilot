@@ -8,10 +8,3 @@ public sealed class DatabaseStartupOptions
     public bool SeedOnStartup { get; init; }
     public bool RepairLegacyMigrationHistory { get; init; }
 }
-
-public sealed class FeatureOptions
-{
-    public const string SectionName = "Features";
-
-    public bool EnableLegacyRuntime { get; init; }
-}

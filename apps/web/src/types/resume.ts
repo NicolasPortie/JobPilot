@@ -44,7 +44,6 @@ export type ResumeVersionDetail = ResumeVersionSummary & {
 
 export type JobTargetDetail = {
   id: string
-  jobLeadId?: string
   sourceKind: string
   sourceUrl: string
   title: string

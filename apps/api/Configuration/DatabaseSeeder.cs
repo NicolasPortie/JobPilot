@@ -58,20 +58,6 @@ public static class DatabaseSeeder
                 IsActive = true,
                 IsDefault = false
             });
-            db.JobFilters.Add(new JobFilter
-            {
-                Id = Guid.NewGuid(),
-                UserId = user.Id,
-                AllowedSeniorities = [],
-                BlockedSeniorities = [],
-                AllowedRoleKeywords = [],
-                BlockedRoleKeywords = [],
-                AllowedWorkplaceTypes = [],
-                BlockedWorkplaceTypes = [],
-                AllowedApplyTypes = [],
-                MinScore = 0,
-                AutoIgnoreLowScore = false
-            });
             SeedProfileValidationRules(db, user.Id);
             await db.SaveChangesAsync();
         }
@@ -105,23 +91,6 @@ public static class DatabaseSeeder
                 });
             }
 
-            if (!await db.JobFilters.AnyAsync(x => x.UserId == user.Id))
-            {
-                db.JobFilters.Add(new JobFilter
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = user.Id,
-                    AllowedSeniorities = [],
-                    BlockedSeniorities = [],
-                    AllowedRoleKeywords = [],
-                    BlockedRoleKeywords = [],
-                    AllowedWorkplaceTypes = [],
-                    BlockedWorkplaceTypes = [],
-                    AllowedApplyTypes = [],
-                    MinScore = 0,
-                    AutoIgnoreLowScore = false
-                });
-            }
 
             SeedProfileValidationRules(db, user.Id);
         }

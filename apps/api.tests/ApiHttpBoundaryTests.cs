@@ -61,23 +61,7 @@ public sealed class ApiHttpBoundaryTests(ApiTestFixture fixture) : IClassFixture
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    [Fact]
-    public async Task AgentProtocolRoute_RequiresAuthentication()
-    {
-        using var client = fixture.Factory.CreateClient();
-
-        var response = await client.GetAsync("/api/agent/profile/validate");
-
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-    }
-
     [Theory]
-    [InlineData("/api/agent/policy")]
-    [InlineData("/api/agent/history")]
-    [InlineData("/api/answers")]
-    [InlineData("/api/question-patterns")]
-    [InlineData("/api/platform-credentials")]
-    [InlineData("/api/agent/platform-credentials")]
     [InlineData("/api/profile")]
     [InlineData("/api/profile/validate")]
     [InlineData("/api/profile-validation-rules")]
@@ -87,19 +71,6 @@ public sealed class ApiHttpBoundaryTests(ApiTestFixture fixture) : IClassFixture
         using var client = fixture.Factory.CreateClient();
 
         var response = await client.GetAsync(route);
-
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-    }
-
-    [Theory]
-    [InlineData("/api/agent/pair")]
-    [InlineData("/api/ai/answer-draft")]
-    [InlineData("/api/question-patterns/resolve")]
-    public async Task ProtectedPostRoutes_AreRegisteredAndRequireAuthentication(string route)
-    {
-        using var client = fixture.Factory.CreateClient();
-
-        var response = await client.PostAsJsonAsync(route, new { });
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }

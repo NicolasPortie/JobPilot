@@ -5,9 +5,6 @@ namespace JobPilot.Api.Services;
 
 public static class AiProviderEndpointPolicy
 {
-    public static void Validate(AiProviderRequest request, IConfiguration configuration) =>
-        Validate(request.ProviderType, request.BaseUrl, configuration);
-
     public static void Validate(AiProvider provider, IConfiguration configuration) =>
         Validate(provider.ProviderType, provider.BaseUrl, configuration);
 

@@ -10,8 +10,7 @@ public sealed class AuthenticationService(
     IRepository<AppUser> users,
     IRepository<RefreshToken> refreshTokens,
     JwtTokenService tokens,
-    IUnitOfWork unitOfWork,
-    IConfiguration configuration) : IAuthenticationService
+    IUnitOfWork unitOfWork) : IAuthenticationService
 {
     private const int MaxFailedAttempts = 5;
     private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
@@ -42,7 +41,7 @@ public sealed class AuthenticationService(
         var refresh = await IssueRefreshAsync(user.Id);
         await unitOfWork.SaveChangesAsync();
         return ServiceResult<AuthResponse>.Ok(
-            new AuthResponse(tokens.CreateToken(user.Id, user.Email, "user", legacyRuntime: LegacyEnabled()), user.Email, refresh));
+            new AuthResponse(tokens.CreateToken(user.Id, user.Email, "user"), user.Email, refresh));
     }
 
     public async Task<ServiceResult<AuthResponse>> RefreshAsync(string refreshToken)
@@ -65,7 +64,7 @@ public sealed class AuthenticationService(
         var next = await IssueRefreshAsync(user.Id, stored.RootCreatedAt);
         await unitOfWork.SaveChangesAsync();
         return ServiceResult<AuthResponse>.Ok(
-            new AuthResponse(tokens.CreateToken(user.Id, user.Email, "user", legacyRuntime: LegacyEnabled()), user.Email, next));
+            new AuthResponse(tokens.CreateToken(user.Id, user.Email, "user"), user.Email, next));
     }
 
     public async Task LogoutAsync(string refreshToken)
@@ -76,9 +75,6 @@ public sealed class AuthenticationService(
         stored.RevokedAt = DateTimeOffset.UtcNow;
         await unitOfWork.SaveChangesAsync();
     }
-
-    private bool LegacyEnabled() =>
-        configuration.GetValue("Features:EnableLegacyRuntime", false);
 
     private async Task<string> IssueRefreshAsync(Guid userId, DateTimeOffset? rootCreatedAt = null)
     {

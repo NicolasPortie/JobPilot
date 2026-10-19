@@ -149,7 +149,7 @@ public sealed class ResumeStructureParserTests
     [Fact]
     public void BuildPlainResume_UsesCleanSectionsWithoutRawTextDuplicate()
     {
-        var data = new ResumeProfileImportData("Nicolas Portie Sussai Silva", "n@x.com", "(18) 99664-6794", "Penápolis", "SP", "Brasil", "", "", "", "Resumo limpo.", ["C#", "SQL"], "", "unknown", []);
+        var data = new ResumeProfileImportData("Nicolas Portie Sussai Silva", "n@x.com", "(18) 99664-6794", "Penápolis", "SP", "Brasil", "", "", "", "Resumo limpo.", ["C#", "SQL"], "", "unknown");
 
         var text = ResumeImportSectionBuilder.BuildPlainResume(data, SampleResume);
 

@@ -117,7 +117,6 @@ public sealed class ProfileImportService
 
         var previousSkills = new HashSet<string>(profile.Skills, StringComparer.OrdinalIgnoreCase);
         ApplyImport(profile, importData, resumePath);
-        var answers = await UpsertAnswersAsync(userId, importData.Answers);
         await PersistResumeLibraryAsync(userId, resumePath, effectiveExtraction, importData, resumeText);
         await _db.SaveChangesAsync();
 
@@ -130,7 +129,7 @@ public sealed class ProfileImportService
         if (droppedSkills.Length > 0)
             warnings.Add($"Competências do perfil que o currículo não cita foram removidas: {string.Join(", ", droppedSkills)}. Adicione de volta no Perfil só o que você pode comprovar.");
 
-        return new ProfileImportResponse(profile, answers, addedSkills, fetched.Keys.ToArray(), warnings.Distinct().ToArray(), effectiveExtraction.Report, resumeText, importData);
+        return new ProfileImportResponse(profile, addedSkills, fetched.Keys.ToArray(), warnings.Distinct().ToArray(), effectiveExtraction.Report, resumeText, importData);
     }
 
     private static ResumeTextExtraction BuildOcrExtraction(ResumeTextExtraction nativeExtraction, ResumeOcrResult ocrResult)
@@ -267,48 +266,6 @@ public sealed class ProfileImportService
         if (data.Skills.Length > 0) profile.Skills = ResumeProfileInference.MergeSkills([], data.Skills);
         if (!string.IsNullOrWhiteSpace(resumePath)) profile.ResumePath = resumePath;
         profile.UpdatedAt = DateTimeOffset.UtcNow;
-    }
-
-    private async Task<int> UpsertAnswersAsync(Guid userId, IEnumerable<ResumeScreeningAnswer> answers)
-    {
-        var count = 0;
-        foreach (var answer in answers.Where(a => !string.IsNullOrWhiteSpace(a.QuestionText) && !string.IsNullOrWhiteSpace(a.AnswerValue)))
-        {
-            var key = string.IsNullOrWhiteSpace(answer.QuestionKey)
-                ? ReusableAnswerService.StableQuestionKey(answer.QuestionText)
-                : ReusableAnswerService.StableQuestionKey(answer.QuestionKey);
-            var questionText = answer.QuestionText.Trim();
-            var existing = await _db.ReusableAnswers.FirstOrDefaultAsync(x =>
-                x.UserId == userId &&
-                (x.QuestionKey == key || x.QuestionText == questionText));
-            if (existing is null)
-            {
-                _db.ReusableAnswers.Add(new ReusableAnswer
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = userId,
-                    QuestionKey = key,
-                    QuestionText = questionText,
-                    AnswerValue = answer.AnswerValue.Trim(),
-                    Category = string.IsNullOrWhiteSpace(answer.Category) ? "resume_import" : answer.Category.Trim()
-                });
-            }
-            else
-            {
-                if (ResumeProfileInference.IsAffirmative(existing.AnswerValue) && ResumeProfileInference.IsNegative(answer.AnswerValue))
-                {
-                    existing.UpdatedAt = DateTimeOffset.UtcNow;
-                    count++;
-                    continue;
-                }
-                existing.QuestionText = questionText;
-                existing.AnswerValue = answer.AnswerValue.Trim();
-                existing.Category = string.IsNullOrWhiteSpace(answer.Category) ? existing.Category : answer.Category.Trim();
-                existing.UpdatedAt = DateTimeOffset.UtcNow;
-            }
-            count++;
-        }
-        return count;
     }
 
     private async Task<Dictionary<string, string>> FetchPublicLinkTextAsync(IEnumerable<string> links, List<string> warnings)

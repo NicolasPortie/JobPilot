@@ -35,7 +35,6 @@ export type AtsProfileSkillAddition = {
 
 export type ResumeImportResult = {
   profile: Profile
-  answersUpserted: number
   skillsAdded: string[]
   linksFetched: string[]
   warnings: string[]
@@ -56,7 +55,6 @@ export type ResumeImportResult = {
   extractedText: string
   importData: {
     skills: string[]
-    answers: { questionKey: string; questionText: string; answerValue: string; category: string }[]
   }
 }
 

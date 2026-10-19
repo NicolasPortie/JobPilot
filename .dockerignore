@@ -9,5 +9,4 @@ documents
 logs
 *.log
 *.tmp
-.agent-secrets
 .jobpilot-token.tmp

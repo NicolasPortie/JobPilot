@@ -22,7 +22,7 @@ JobPilot ajuda uma pessoa a pesquisar oportunidades, entender se uma vaga combin
 - validar assinatura real de PDF/DOCX, limites de páginas e antivírus;
 - definir retenção/exclusão para originais, texto extraído, prompts, respostas e exports;
 - adicionar testes de dois usuários para cada recurso filho e cada download;
-- manter migração/backup antes de apagar tabelas e serviços legados;
+- manter migração/backup antes de qualquer migração destrutiva;
 - atualizar o OpenAPI gerado para refletir somente os contratos atuais.
 
 ### P1 — tornar o trabalho mais rápido

@@ -36,15 +36,6 @@ public class ProfileImportServiceTests
             ResumePath = resumePath,
             Skills = ["C#", ".NET"]
         });
-        db.ReusableAnswers.Add(new ReusableAnswer
-        {
-            Id = Guid.NewGuid(),
-            UserId = userId,
-            QuestionKey = "spring_boot_solido",
-            QuestionText = "Possui conhecimento sólido da base do ecossistema Spring Boot?",
-            AnswerValue = "Não",
-            Category = "manual"
-        });
         await db.SaveChangesAsync();
 
         try
@@ -70,11 +61,6 @@ public class ProfileImportServiceTests
             Assert.False(string.IsNullOrWhiteSpace(version.PlainText));
             Assert.Contains(await db.ResumeSections.Where(x => x.ResumeVersionId == version.Id).ToListAsync(), x => x.SectionType == "skills");
 
-            var answers = await db.ReusableAnswers.Where(x => x.UserId == userId).ToListAsync();
-            Assert.Contains(answers, x => x.QuestionText.Contains("Spring Boot") && x.AnswerValue == "Sim");
-            Assert.Contains(answers, x => x.QuestionText.Contains("TypeScript") && x.AnswerValue == "Sim");
-            Assert.Contains(answers, x => x.QuestionText.Contains("JavaScript") && x.AnswerValue == "Sim");
-            Assert.Single(answers, x => x.QuestionText.Contains("Spring Boot"));
         }
         finally
         {
@@ -129,48 +115,6 @@ public class ProfileImportServiceTests
             Assert.Contains("Java", result.Profile.Skills);
             Assert.Contains("Spring Boot", result.Profile.Skills);
             Assert.Contains("API REST", result.Profile.Skills);
-            Assert.Contains(await db.ReusableAnswers.ToListAsync(), x => x.QuestionText.Contains("Spring Boot") && x.AnswerValue == "Sim");
-        }
-        finally
-        {
-            if (File.Exists(resumePath)) File.Delete(resumePath);
-        }
-    }
-
-    [Fact]
-    public async Task ImportAsync_NaoRebaixaRespostaConfirmadaParaNao()
-    {
-        await using var db = CreateDb();
-        var userId = Guid.NewGuid();
-        var resumePath = Path.Combine(Path.GetTempPath(), $"jobpilot-resume-{Guid.NewGuid():N}.txt");
-        await File.WriteAllTextAsync(resumePath, "Curriculo sem mencao textual de Spring Boot.");
-
-        db.CandidateProfiles.Add(new CandidateProfile
-        {
-            Id = Guid.NewGuid(),
-            UserId = userId,
-            ResumePath = resumePath,
-            Skills = ["Spring Boot", "TypeScript"]
-        });
-        db.ReusableAnswers.Add(new ReusableAnswer
-        {
-            Id = Guid.NewGuid(),
-            UserId = userId,
-            QuestionKey = "typescript",
-            QuestionText = "Possui conhecimento/experiência com TypeScript?",
-            AnswerValue = "Sim",
-            Category = "manual"
-        });
-        await db.SaveChangesAsync();
-
-        try
-        {
-            var service = new ProfileImportService(db, new ResumeTextService(), new ResumeOcrService(), new FakeAiChatService(), new HttpClient());
-
-            await service.ImportAsync(userId, new ProfileImportRequest(FetchPublicLinks: false, UseAi: false));
-
-            Assert.Contains(await db.ReusableAnswers.ToListAsync(), x => x.QuestionKey == "typescript" && x.AnswerValue == "Sim");
-            Assert.Contains(await db.ReusableAnswers.ToListAsync(), x => x.QuestionText.Contains("Spring Boot") && x.AnswerValue == "Sim");
         }
         finally
         {
@@ -391,15 +335,6 @@ public class ProfileImportServiceTests
 
     private sealed class FakeAiChatService : IAiChatService
     {
-        public Task<AnswerDraftResponse> DraftAnswerAsync(Guid userId, string questionText, string? jobContext, CandidateProfile? profile) =>
-            Task.FromResult(new AnswerDraftResponse("", false, "fake"));
-
-        public Task<BrowserActionPlanResponse> PlanBrowserActionAsync(Guid userId, BrowserActionPlanRequest request, CandidateProfile? profile, List<ReusableAnswer> answers) =>
-            Task.FromResult(new BrowserActionPlanResponse("checkpoint", "", "", "fake", 0m, true));
-
-        public Task<JobFitReviewResponse> ReviewJobFitAsync(Guid userId, JobLead lead, CandidateProfile? profile, JobFilter filter) =>
-            Task.FromResult(SearchDecisionHarness.UnavailableReview("fake"));
-
         public Task<ResumeProfileImportData?> AnalyzeResumeProfileAsync(Guid userId, string resumeText, string publicLinksText, CandidateProfile? existingProfile) =>
             Task.FromResult<ResumeProfileImportData?>(null);
 
@@ -409,14 +344,6 @@ public class ProfileImportServiceTests
         public Task<TailoredResumeGenerationResponse?> GenerateTailoredResumeAsync(Guid userId, TailoredResumeGenerationInput input) =>
             Task.FromResult<TailoredResumeGenerationResponse?>(null);
 
-        public Task<PageStateResponse> ClassifyPageStateAsync(Guid userId, PageStateRequest request) =>
-            Task.FromResult(new PageStateResponse("unknown", "fake", 0m));
-
-        public Task<StepValidationResponse> ValidateApplicationStepAsync(Guid userId, StepValidationRequest request) =>
-            Task.FromResult(new StepValidationResponse(false, "fake", 0m, true));
-
-        public Task<AnswerDraftResponse> TestProviderAsync(Guid userId, Guid providerId) =>
-            Task.FromResult(new AnswerDraftResponse("fake", false, "fake"));
     }
 
     private sealed class FakeHttpHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler

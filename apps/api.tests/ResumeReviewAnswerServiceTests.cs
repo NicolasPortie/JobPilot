@@ -138,23 +138,11 @@ public class ResumeReviewAnswerServiceTests
 
     private sealed class FakeAiChatService : IAiChatService
     {
-        public Task<AnswerDraftResponse> DraftAnswerAsync(Guid userId, string questionText, string? jobContext, CandidateProfile? profile) =>
-            Task.FromResult(new AnswerDraftResponse("", false, "fake"));
-        public Task<BrowserActionPlanResponse> PlanBrowserActionAsync(Guid userId, BrowserActionPlanRequest request, CandidateProfile? profile, List<ReusableAnswer> answers) =>
-            Task.FromResult(new BrowserActionPlanResponse("checkpoint", "", "", "fake", 0m, true));
-        public Task<JobFitReviewResponse> ReviewJobFitAsync(Guid userId, JobLead lead, CandidateProfile? profile, JobFilter filter) =>
-            Task.FromResult(SearchDecisionHarness.UnavailableReview("fake"));
         public Task<ResumeProfileImportData?> AnalyzeResumeProfileAsync(Guid userId, string resumeText, string publicLinksText, CandidateProfile? existingProfile) =>
             Task.FromResult<ResumeProfileImportData?>(null);
         public Task<JobRequirementExtractionResponse?> ExtractJobRequirementsAsync(Guid userId, JobRequirementExtractionInput input) =>
             Task.FromResult<JobRequirementExtractionResponse?>(null);
         public Task<TailoredResumeGenerationResponse?> GenerateTailoredResumeAsync(Guid userId, TailoredResumeGenerationInput input) =>
             Task.FromResult<TailoredResumeGenerationResponse?>(null);
-        public Task<PageStateResponse> ClassifyPageStateAsync(Guid userId, PageStateRequest request) =>
-            Task.FromResult(new PageStateResponse("unknown", "fake", 0m));
-        public Task<StepValidationResponse> ValidateApplicationStepAsync(Guid userId, StepValidationRequest request) =>
-            Task.FromResult(new StepValidationResponse(false, "fake", 0m, true));
-        public Task<AnswerDraftResponse> TestProviderAsync(Guid userId, Guid providerId) =>
-            Task.FromResult(new AnswerDraftResponse("fake", false, "fake"));
     }
 }

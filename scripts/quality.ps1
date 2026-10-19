@@ -9,9 +9,8 @@ try {
   Invoke-QualityCommand (Join-Path $root "scripts\architecture-check.ps1")
   Invoke-QualityCommand dotnet -Arguments @('format', 'JobPilot.slnx', '--verify-no-changes', '--no-restore')
 
-  # MVP primeiro (núcleo web), legado em seguida e explícito.
+  # Testes do backend.
   Invoke-QualityCommand dotnet -Arguments @('test', 'apps/api.tests', '--configuration', 'Release', '--collect:XPlat Code Coverage')
-  Invoke-QualityCommand dotnet -Arguments @('test', 'apps/agent.tests', '--configuration', 'Release')
 
   # Migrations precisam gerar script idempotente (valida o modelo sem banco).
   $migrationsSql = Join-Path $root ".build\migrations.sql"

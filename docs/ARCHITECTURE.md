@@ -10,8 +10,6 @@ O limite central é intencional: a aplicação não controla o computador, não 
 - `apps/api`: autenticação, isolamento por usuário, persistência, ingestão de texto/URL/anexo, análise de requisitos, tailoring e downloads autorizados.
 - armazenamento privado: arquivos recebidos e exportações ficam fora da raiz pública, com nomes opacos e acesso por autorização.
 - `infra`: PostgreSQL e configuração de desenvolvimento.
-- `apps/agent`: legado em quarentena. Não é dependência do fluxo web; suas rotas HTTP estão desativadas ou protegidas por uma policy de migração.
-- Extensão do navegador: **removida do produto** (código, protocolo `api/extension/*`, tabelas `BrowserExtensionSessions`/`BrowserExtensionCommandJobs` e opções de pareamento/CORS). Não existe mais nada para instalar ou parear.
 
 ## Fluxo principal
 
@@ -43,13 +41,12 @@ O usuário edita seções, escolhe um layout ATS-safe e exporta PDF, DOCX ou TXT
 
 ## Contratos públicos
 
-Os contratos da web são deliberadamente menores que o legado:
+Os contratos da web são deliberadamente pequenos:
 
 - perfil: dados profissionais necessários para adaptação; CPF e `ResumePath` não saem pelo endpoint público;
 - vaga: título, empresa, descrição, origem, link, score, motivo, status e IDs opacos de currículo; campos de automação e caminhos físicos não saem;
 - importação: upload multipart; o caminho é criado pelo servidor e só existe internamente;
 - exportação: id, versão, formato, avisos e data; o caminho do arquivo permanece privado;
-- automação/extensão: `410 Gone` ou policy de legado, sem aparecer no OpenAPI principal.
 
 ## Segurança por desenho
 
@@ -61,15 +58,13 @@ Os contratos da web são deliberadamente menores que o legado:
 - URL de vaga, links públicos do currículo e endpoint de IA passam por allowlist/egress seguro.
 - Logs e prompts devem ser redigidos; CPF, tokens, senhas e caminhos não entram em traces públicos.
 
-## O que ficou fora do núcleo
+## Fora do escopo
 
-Não fazem parte da experiência principal: `AgentRun`, `AgentStep`, `AgentTraceStep`, checkpoints de navegador, memória de workflow, `PlatformCredential`, respostas reutilizáveis para autofill, login de LinkedIn, fila de aplicação, `auto-submit`, polling de extensão e drivers Playwright de navegação.
-
-Esses modelos ainda podem existir nas migrações e nos testes históricos para permitir uma retirada controlada. O runtime legado está desligado por padrão em `Features:EnableLegacyRuntime=false`, e tokens comuns não recebem a claim necessária para acessar suas policies.
+O JobPilot não controla navegador, não entra em contas externas, não guarda credenciais de terceiros e não envia candidaturas. A candidatura é sempre manual.
 
 ## Decisões de manutenção
 
 - A API é a fonte de verdade dos contratos; o frontend não deve recriar regras de negócio ou caminhos de arquivo.
 - A UI deve usar os termos foco, oportunidade, aderência, evidência, revisão e exportação. Termos agent, run, queue, checkpoint e browser não aparecem no fluxo normal.
 - Toda nova integração externa precisa de consentimento explícito, egress restrito, limites, auditoria e uma decisão de produto separada.
-- Antes de remover tabelas legadas, exportar/backup dos dados e executar migração reversível. A remoção física de agente/extensão é uma etapa posterior, não uma dependência para o MVP.
+- Antes de qualquer migração destrutiva, fazer backup dos dados e executá-la fora do boot da API.

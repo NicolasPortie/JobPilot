@@ -26,11 +26,6 @@ Assert-MaxLines "apps\api\Services\ResumeExportService.cs" 400
 Assert-MaxLines "apps\api\Services\ResumeExportRenderer.cs" 400
 Assert-MaxLines "apps\api\Services\JobTargetService.cs" 400
 Assert-MaxLines "apps\api\Services\JobTargetAnalyzer.cs" 400
-Assert-MaxLines "apps\api\Services\AgentTaskQueueService.cs" 400
-Assert-MaxLines "apps\api\Services\DiscoveredJobMapper.cs" 400
-Assert-MaxLines "apps\api\Services\AutomationProcessService.cs" 400
-Assert-MaxLines "apps\api\Services\AutomationReadinessService.cs" 400
-Assert-MaxLines "apps\api\Services\AutomationRuntimeLauncher.cs" 400
 Assert-MaxLines "apps\api\Services\ProfileImportService.cs" 400
 Assert-MaxLines "apps\api\Services\ResumeImportSectionBuilder.cs" 400
 Assert-MaxLines "apps\api\Services\ResumeProfileInference.cs" 400
@@ -47,11 +42,6 @@ Assert-MaxLines "apps\web\src\app\dataLoaders.ts" 150
 Assert-MaxLines "apps\web\src\app\useResumeWorkflow.ts" 250
 Assert-MaxLines "apps\web\src\index.css" 20
 Assert-MaxLines "apps\web\src\types.ts" 20
-Assert-MaxLines "apps\agent\Application\Orchestration\ApplicationAgent.cs" 750
-Assert-MaxLines "apps\agent\Application\Orchestration\ApplicationAgent.Extension.cs" 350
-Assert-MaxLines "apps\agent\Application\Orchestration\ApplicationAgent.ObservationLoop.cs" 320
-Assert-MaxLines "apps\agent\Application\Execution\ApplicationAgent.Execution.cs" 260
-Assert-MaxLines "apps\agent\Application\Trace\ApplicationAgent.Trace.cs" 300
 
 Get-ChildItem -Path (Join-Path $root "apps\web\src\features") -Filter "*Tab.tsx" -File -Recurse |
   ForEach-Object {
@@ -66,8 +56,8 @@ Get-ChildItem -Path (Join-Path $root "apps\web\src\styles") -Filter "*.css" -Fil
   }
 
 $controllerCount = Get-FileCount "apps\api\Controllers" "*Controller.cs"
-if ($controllerCount -lt 23) {
-  $violations.Add("The API controller migration baseline requires at least twenty-three controllers.")
+if ($controllerCount -lt 10) {
+  $violations.Add("The API controller baseline requires at least ten controllers.")
 }
 
 if (-not (Test-Path -LiteralPath (Join-Path $root "apps\web\src\api\generated\types.gen.ts"))) {
@@ -151,11 +141,6 @@ $hybridIdentifiers = Get-ChildItem -Path (Join-Path $root "apps") -Include "*.cs
   Select-String -Pattern "CarregadorApplicationAgentRuntime|ResultadoServico|ConfiguracaoSeguranca|ParaActionResult"
 if ($hybridIdentifiers) {
   $violations.Add("Known hybrid or reverted identifiers were reintroduced:`n$hybridIdentifiers")
-}
-
-$layerNamedAgentTests = Get-ChildItem -Path (Join-Path $root "apps\agent.tests") -Filter "Camada*.cs" -File
-if ($layerNamedAgentTests) {
-  $violations.Add("Agent tests must use behavioral names instead of historical Camada* names:`n$layerNamedAgentTests")
 }
 
 $trackedGenerated = git -C $root ls-files | Select-String -Pattern '(^|/)(bin|obj|node_modules|dist|artifacts|logs)/'

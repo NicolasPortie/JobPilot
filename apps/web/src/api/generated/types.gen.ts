@@ -82,7 +82,6 @@ export type JobRequirementDto = {
 
 export type JobTargetDetail = {
     id: string;
-    jobLeadId: null | string;
     sourceKind: string;
     sourceUrl: string;
     title: string;
@@ -218,7 +217,6 @@ export type ResumeExtractionReport = {
  */
 export type ResumeFileImportResponse = {
     profile: CandidateProfileResponse;
-    answersUpserted: number | string;
     skillsAdded: Array<string>;
     linksFetched: Array<string>;
     warnings: Array<string>;
@@ -269,7 +267,6 @@ export type ResumeProfileImportData = {
     skills: Array<string>;
     targetRole: string;
     seniority: string;
-    answers: Array<ResumeScreeningAnswer>;
 };
 
 export type ResumeRequirementEvidenceDto = {
@@ -315,13 +312,6 @@ export type ResumeScoreComponent = {
     maxScore: number | string;
     status: string;
     reason: string;
-};
-
-export type ResumeScreeningAnswer = {
-    questionKey: string;
-    questionText: string;
-    answerValue: string;
-    category: string;
 };
 
 export type ResumeSectionDiff = {

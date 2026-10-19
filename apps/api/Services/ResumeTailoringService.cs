@@ -65,7 +65,6 @@ public sealed class ResumeTailoringService(JobPilotDbContext db, ResumeEvidenceM
             Id = Guid.NewGuid(),
             UserId = userId,
             ResumeDocumentId = baseVersion.ResumeDocumentId,
-            JobLeadId = target.JobLeadId,
             Title = ResumeTailoringAnalyzer.BuildTitle(target),
             TargetCompany = target.Company,
             TargetRole = ResumeTailoringAnalyzer.CleanTargetRole(target),
@@ -104,7 +103,6 @@ public sealed class ResumeTailoringService(JobPilotDbContext db, ResumeEvidenceM
             Id = Guid.NewGuid(),
             UserId = userId,
             ResumeVersionId = tailored.Id,
-            JobLeadId = target.JobLeadId,
             ProviderModel = aiResult is null ? "backend-deterministic" : "ai-structured",
             PromptVersion = "resume-tailoring-v1",
             ResultJson = JsonSerializer.Serialize(new

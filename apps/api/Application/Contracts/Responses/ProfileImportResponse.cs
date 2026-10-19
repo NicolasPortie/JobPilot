@@ -4,7 +4,6 @@ namespace JobPilot.Api.Application.Contracts;
 
 public record ProfileImportResponse(
     CandidateProfile Profile,
-    int AnswersUpserted,
     string[] SkillsAdded,
     string[] LinksFetched,
     string[] Warnings,
@@ -18,7 +17,6 @@ public record ProfileImportResponse(
 /// </summary>
 public sealed record ResumeFileImportResponse(
     CandidateProfileResponse Profile,
-    int AnswersUpserted,
     string[] SkillsAdded,
     string[] LinksFetched,
     string[] Warnings,
@@ -29,7 +27,6 @@ public sealed record ResumeFileImportResponse(
     public static ResumeFileImportResponse From(ProfileImportResponse response) =>
         new(
             CandidateProfileResponse.From(response.Profile),
-            response.AnswersUpserted,
             response.SkillsAdded,
             response.LinksFetched,
             response.Warnings,

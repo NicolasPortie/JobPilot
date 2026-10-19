@@ -10,7 +10,7 @@ JobPilot é um workspace local-first para preparar um currículo ATS verdadeiro 
 4. Compare a vaga com o currículo base e veja pontos fortes, lacunas e perguntas de revisão.
 5. Edite a versão adaptada, exporte PDF/DOCX/TXT e abra a vaga para se candidatar manualmente.
 
-O núcleo do produto está em `apps/web` e `apps/api`. O runtime `apps/agent` é legado em quarentena: não participa do fluxo web e permanece somente para migração, testes históricos e eventual decisão futura. A extensão do navegador foi removida do produto (código, protocolo, tabelas e docs): não há nada para instalar ou parear.
+O produto está em `apps/web` (interface) e `apps/api` (API e persistência). Não há extensão de navegador nem automação: nada para instalar ou parear.
 
 ## Uso rápido (várias candidaturas)
 
@@ -89,7 +89,7 @@ dotnet user-secrets set "Ai:ApiKey" "<sua-chave>" --project apps\api
 
 Para um gateway compatível com OpenAI (ex.: OmniRoute em HTTPS), use `Ai:Provider=openai` com `Ai:BaseUrl` (terminando em `/v1`), `Ai:Model`, `Ai:Name` (rótulo na tela) e `Ai:AllowedHosts` (o host do gateway); a chave vai em `Ai:ApiKey`. Endereços `http://` ou de rede privada (`192.168.x.x`) são recusados de propósito. `Ai:Provider` + `Ai:ApiKey` vencem a configuração antiga `Kimi:ApiKey`/`KIMI_API_KEY`, que só vale quando `Ai:*` não está definido. E-mail e telefone não vão no prompt da IA: são trocados por marcadores e restaurados na resposta. Se o texto da IA for descartado (tecnologia sem evidência, contato sumido ou IA fora do ar), a tela diz o motivo e o currículo sai sem IA. O controle "Usar IA" da tela mostra se o provedor está respondendo; sem IA, o JobPilot gera o currículo de forma determinística, sem inventar conteúdo. Texto da IA é descartado se citar tecnologia que não está no seu currículo.
 
-`Security:SecretKey` é independente da chave JWT. O runtime legado fica desligado por padrão (`Features:EnableLegacyRuntime=false`) e não deve ser ativado em uma instalação de produção.
+`Security:SecretKey` é independente da chave JWT.
 
 ## Contratos principais da API
 
@@ -103,8 +103,6 @@ Para um gateway compatível com OpenAI (ex.: OmniRoute em HTTPS), use `Ai:Provid
 - `POST /api/job-targets/organize-screenshot` — análise de screenshot/PDF enviado.
 - `POST /api/resume/tailor` e `/api/resume/ats-build` — adaptação com evidências.
 - `POST /api/resume/versions/{id}/exports` — exportação autorizada.
-
-Os endpoints de automação retornam `410 Gone`. Eles não devem ser reativados para completar o fluxo principal.
 
 ## Regra de engenharia (permanente)
 

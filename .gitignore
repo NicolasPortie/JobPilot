@@ -24,7 +24,6 @@ debug-filter.cs
 goal.md
 documents/
 apps/api/documents/
-apps/agent/.jobpilot-profile/
 
 # Artefatos locais de testes e ferramentas
 TestResults/

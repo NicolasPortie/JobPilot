@@ -18,8 +18,7 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddJobPilotServices(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddOpenApi("v1", options => options.AddDocumentTransformer<LegacyOpenApiExclusion>());
-        services.AddTransient<LegacyOpenApiExclusion>();
+        services.AddOpenApi("v1");
         services.AddProblemDetails();
         services.AddExceptionHandler<ApiExceptionHandler>();
 
@@ -34,7 +33,6 @@ public static class ServiceCollectionExtensions
         });
 
         services.Configure<DatabaseStartupOptions>(configuration.GetSection(DatabaseStartupOptions.SectionName));
-        services.Configure<FeatureOptions>(configuration.GetSection(FeatureOptions.SectionName));
 
         services.AddDbContext<JobPilotDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
@@ -82,16 +80,6 @@ public static class ServiceCollectionExtensions
                         QueueLimit = 0
                     }));
 
-            options.AddPolicy(RateLimitPolicies.Agent, httpContext =>
-                RateLimitPartition.GetFixedWindowLimiter(
-                    partitionKey: httpContext.User.Identity?.Name ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                    factory: _ => new FixedWindowRateLimiterOptions
-                    {
-                        PermitLimit = 200,
-                        Window = TimeSpan.FromMinutes(1),
-                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                        QueueLimit = 5
-                    }));
 
             options.AddPolicy(RateLimitPolicies.Analysis, httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(
@@ -128,37 +116,11 @@ public static class ServiceCollectionExtensions
             };
         });
 
-        services.AddScoped<ScoringService>();
-        services.AddScoped<AnswerResolver>();
-        services.AddScoped<AnswerCatalogService>();
-        services.AddScoped<JobFilterService>();
-        services.AddScoped<ExecutionEventQueryService>();
         services.AddScoped<ProfileGuard>();
         services.AddScoped<CandidateProfileService>();
-        services.AddScoped<ReusableAnswerService>();
-        services.AddScoped<CheckpointResolutionService>();
-        services.AddScoped<CheckpointQueryService>();
         services.AddScoped<JwtTokenService>();
         services.AddScoped<IAuthenticationService, AuthenticationService>();
-        services.AddScoped<ReadinessService>();
-        services.AddScoped<AutomationProcessService>();
-        services.AddScoped<AutomationReadinessService>();
-        services.AddScoped<ApplicationAuditService>();
-        services.AddScoped<ApplicationLimitService>();
-        services.AddScoped<IPlatformCredentialService, PlatformCredentialService>();
-        services.AddScoped<AgentTaskQueueService>();
-        services.AddScoped<AgentAnswerResolutionService>();
-        services.AddScoped<IAgentProtocolService, AgentProtocolService>();
-        services.AddScoped<AiProviderService>();
         services.AddScoped<AiSettingsService>();
-        services.AddScoped<ApplicationRunService>();
-        services.AddScoped<AutoApplyPolicyService>();
-        services.AddScoped<AgentLearningService>();
-        services.AddScoped<AgentManagementService>();
-        services.AddScoped<OperationalHealthService>();
-        services.AddScoped<ApplicationMaintenanceService>();
-        services.AddScoped<ApplicationResumeService>();
-        services.AddScoped<ApplicationResumePreparationService>();
         services.AddScoped<ResumeFileService>();
         services.AddScoped<JobTargetService>();
         services.AddScoped<JobTargetUrlExtractionService>();
@@ -196,7 +158,6 @@ public static class ServiceCollectionExtensions
                 client.Timeout = TimeSpan.FromSeconds(60);
             })
             .ConfigurePrimaryHttpMessageHandler(() => OutboundUrlPolicy.CreateHandler());
-        services.AddHostedService<RunMaintenanceService>();
 
         var jwtKey = SecurityConfiguration.JwtKey(configuration);
         var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
@@ -213,23 +174,7 @@ public static class ServiceCollectionExtensions
                     IssuerSigningKey = signingKey
                 };
             });
-        services.AddScoped<IAuthorizationHandler, ActiveAgentDeviceHandler>();
-        services.AddAuthorization(options =>
-        {
-            options.AddPolicy("LegacyRuntime", policy =>
-            {
-                policy.RequireAuthenticatedUser();
-                policy.RequireClaim("legacy_runtime", "enabled");
-            });
-
-            options.AddPolicy("ActiveAgent", policy =>
-            {
-                policy.RequireAuthenticatedUser();
-                policy.RequireRole("agent");
-                policy.RequireClaim("legacy_runtime", "enabled");
-                policy.AddRequirements(new ActiveAgentDeviceRequirement());
-            });
-        });
+        services.AddAuthorization();
 
         return services;
     }

@@ -47,8 +47,8 @@ production profile keeps PostgreSQL internal: use `pg_dump` inside the postgres
 container for that profile, or an explicitly configured private database port.
 The script alone does not back up document volumes.
 Run a restore test before relying on a backup, and always back up before
-applying a destructive migration (legacy table removal requires backup +
-reversible migration outside boot).
+applying a destructive migration (run it outside boot, with a backup and a
+rollback plan).
 
 ## Runbook
 

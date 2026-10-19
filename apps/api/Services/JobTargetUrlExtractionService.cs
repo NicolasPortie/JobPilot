@@ -30,7 +30,7 @@ public sealed class JobTargetUrlExtractionService(HttpClient http)
 
             var text = ResumeTextSanitizer.JoinNonEmpty("\n", manualText, HtmlToText(html));
             if (!string.IsNullOrWhiteSpace(text) && text.Length >= 80)
-                return new ResolvedJobSource("url", text, url, "", "", "", null, [], []);
+                return new ResolvedJobSource("url", text, url, "", "", "", [], []);
         }
         catch (HttpRequestException ex)
         {
@@ -69,7 +69,7 @@ public sealed class JobTargetUrlExtractionService(HttpClient http)
                 string.IsNullOrWhiteSpace(manualText) ? "" : $"Observacoes manuais do usuario:\n{manualText}");
 
             if (sourceText.Length >= 500 && !string.IsNullOrWhiteSpace(description))
-                return new ResolvedJobSource("url", sourceText, canonicalUrl, title, company, location, null, [], []);
+                return new ResolvedJobSource("url", sourceText, canonicalUrl, title, company, location, [], []);
 
             return BuildUrlFallbackSource(originalUrl, manualText, "LinkedIn retornou a vaga, mas o texto principal veio incompleto. Cole a descricao completa ou envie screenshot/PDF.");
         }
@@ -156,7 +156,7 @@ public sealed class JobTargetUrlExtractionService(HttpClient http)
                     string.IsNullOrWhiteSpace(manualText) ? "" : $"Observacoes manuais do usuario:\n{manualText}");
 
                 if (sourceText.Length >= 80)
-                    return new ResolvedJobSource("url", sourceText, url, title, company, location, null, [], []);
+                    return new ResolvedJobSource("url", sourceText, url, title, company, location, [], []);
             }
             catch
             {
@@ -271,7 +271,7 @@ public sealed class JobTargetUrlExtractionService(HttpClient http)
         var text = ResumeTextSanitizer.JoinNonEmpty("\n", manualText, urlContext);
         if (text.Length < 80)
             text = ResumeTextSanitizer.JoinNonEmpty("\n", text, "Contexto parcial de vaga informado por URL. Requisitos completos nao foram extraidos automaticamente.");
-        return new ResolvedJobSource("url", text, url, ExtractTitleFromUrlContext(urlContext), "", "", null, [], [warning]);
+        return new ResolvedJobSource("url", text, url, ExtractTitleFromUrlContext(urlContext), "", "", [], [warning]);
     }
 
     private static string BuildUrlContext(string url)

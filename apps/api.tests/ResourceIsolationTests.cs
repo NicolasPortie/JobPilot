@@ -13,14 +13,6 @@ public sealed class ResourceIsolationTests(ApiTestFixture fixture) : IClassFixtu
     private const string LongJobText = "Vaga para pessoa desenvolvedora .NET pleno com React e SQL Server. Empresa Exemplo Tech. Trabalho remoto em tempo integral com beneficios e plano de carreira.";
 
     [Fact]
-    public async Task Automation_ReturnsGone_ForAnonymous()
-    {
-        using var anon = fixture.Factory.CreateClient();
-        var response = await anon.PostAsJsonAsync("/api/automation/discover", new { });
-        Assert.Equal(HttpStatusCode.Gone, response.StatusCode);
-    }
-
-    [Fact]
     public async Task JobTarget_OfAnotherUser_ReturnsNotFound()
     {
         var (clientA, _) = await CreateLoggedClientAsync();

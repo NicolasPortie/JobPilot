@@ -33,7 +33,7 @@ public sealed class JobTargetAnalyzerTests
         """;
 
     private static JobRequirementExtractionResponse Extract(string text) =>
-        JobTargetAnalyzer.BuildDeterministicExtraction(new ResolvedJobSource("manual_text", text, "", "", "", "", null, [], []));
+        JobTargetAnalyzer.BuildDeterministicExtraction(new ResolvedJobSource("manual_text", text, "", "", "", "", [], []));
 
     private static string Importance(JobRequirementExtractionResponse response, string label) =>
         response.Requirements.Single(x => x.Label == label).Importance;

@@ -24,7 +24,6 @@ internal static class ResumeProfileInference
         var github = links.FirstOrDefault(x => x.Contains("github.com", StringComparison.OrdinalIgnoreCase)) ?? "";
         var portfolio = links.FirstOrDefault(x => !x.Contains("linkedin.com", StringComparison.OrdinalIgnoreCase) && !x.Contains("github.com", StringComparison.OrdinalIgnoreCase)) ?? "";
 
-        var answers = BuildTechnicalAnswers(skills, normalized);
         // O resumo vem do próprio currículo; o do perfil só vale se estiver limpo (já houve
         // importações que gravaram nome, telefone e e-mail dentro do resumo).
         var summary = !string.IsNullOrWhiteSpace(parsed.Summary)
@@ -47,22 +46,7 @@ internal static class ResumeProfileInference
             summary,
             skills,
             string.IsNullOrWhiteSpace(profile.TargetRole) ? ExtractTargetRole(corpus) : profile.TargetRole,
-            string.IsNullOrWhiteSpace(profile.Seniority) ? "unknown" : profile.Seniority,
-            answers);
-    }
-
-    private static ResumeScreeningAnswer[] BuildTechnicalAnswers(string[] skills, string normalizedCorpus)
-    {
-        var skillSet = new HashSet<string>(skills, StringComparer.OrdinalIgnoreCase);
-        var answers = new List<ResumeScreeningAnswer>();
-        AddYesNo(answers, "typescript", "Possui conhecimento/experiência com TypeScript?", HasAny(skillSet, "TypeScript"));
-        AddYesNo(answers, "javascript", "Possui conhecimento/experiência com JavaScript?", HasAny(skillSet, "JavaScript", "TypeScript", "React"));
-        AddYesNo(answers, "java", "Possui conhecimento sólido da linguagem Java (17+)?", HasAny(skillSet, "Java"));
-        AddYesNo(answers, "spring_boot", "Possui conhecimento sólido da base do ecossistema Spring Boot?", HasAny(skillSet, "Spring Boot", "Spring"));
-        AddYesNo(answers, "apis_rest", "Possui conhecimento sólido no que se refere a construção de APIs REST?", HasAny(skillSet, "API REST", "APIs REST", "REST", "ASP.NET Core"));
-        AddYesNo(answers, "html_css", "Possui conhecimento sólido de HTML5/ CSS3?", HasAny(skillSet, "HTML", "HTML5", "CSS", "CSS3", "React"));
-        AddYesNo(answers, "oop", "Possui experiência anterior com lógica de programação e orientação a objetos bem consolidadas?", HasAny(skillSet, "C#", ".NET", "Java", "ASP.NET Core") || normalizedCorpus.Contains("orientacao a objetos"));
-        return answers.ToArray();
+            string.IsNullOrWhiteSpace(profile.Seniority) ? "unknown" : profile.Seniority);
     }
 
     public static ResumeProfileImportData MergeImportData(ResumeProfileImportData deterministic, ResumeProfileImportData ai)
@@ -81,8 +65,7 @@ internal static class ResumeProfileInference
             ProfessionalSummary = Prefer(ai.ProfessionalSummary, deterministic.ProfessionalSummary),
             Skills = MergeSkills(deterministic.Skills, ai.Skills),
             TargetRole = Prefer(ai.TargetRole, deterministic.TargetRole),
-            Seniority = Prefer(ai.Seniority, deterministic.Seniority, "unknown"),
-            Answers = deterministic.Answers.Concat(ai.Answers).GroupBy(a => ReusableAnswerService.StableQuestionKey(a.QuestionKey + " " + a.QuestionText)).Select(g => g.Last()).ToArray()
+            Seniority = Prefer(ai.Seniority, deterministic.Seniority, "unknown")
         };
     }
 
@@ -126,22 +109,6 @@ internal static class ResumeProfileInference
 
     public static string Prefer(string current, string imported, string fallback = "") =>
         !string.IsNullOrWhiteSpace(current) ? current.Trim() : (!string.IsNullOrWhiteSpace(imported) ? imported.Trim() : fallback);
-
-    private static bool HasAny(HashSet<string> skills, params string[] names) => names.Any(skills.Contains);
-
-    public static bool IsAffirmative(string value) =>
-        value.Trim().Equals("sim", StringComparison.OrdinalIgnoreCase) ||
-        value.Trim().Equals("yes", StringComparison.OrdinalIgnoreCase) ||
-        value.Trim().Equals("true", StringComparison.OrdinalIgnoreCase);
-
-    public static bool IsNegative(string value) =>
-        value.Trim().Equals("nao", StringComparison.OrdinalIgnoreCase) ||
-        value.Trim().Equals("não", StringComparison.OrdinalIgnoreCase) ||
-        value.Trim().Equals("no", StringComparison.OrdinalIgnoreCase) ||
-        value.Trim().Equals("false", StringComparison.OrdinalIgnoreCase);
-
-    private static void AddYesNo(List<ResumeScreeningAnswer> answers, string key, string question, bool value) =>
-        answers.Add(new ResumeScreeningAnswer(key, question, value ? "Sim" : "Não", "resume_import"));
 
     // Sem seção de resumo, aproveita a primeira frase longa do texto; nunca inventa uma profissão.
     private static string BuildSummary(string resumeText) =>

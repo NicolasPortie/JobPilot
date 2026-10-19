@@ -14,7 +14,7 @@ public sealed class PostgresMigrationTests
     private static readonly string[] ExistingTables = [
         "ResumeImports", "ResumeDocuments", "ResumeVersions", "ResumeSections", "ResumeExports",
         "ResumeTailoringRuns", "JobTargets", "JobRequirements", "ResumeEvidenceMapRuns",
-        "ResumeRequirementEvidences", "ApplicationJobs"
+        "ResumeRequirementEvidences"
     ];
 
     [PostgresFact]
@@ -107,13 +107,10 @@ public sealed class PostgresMigrationTests
         var target = new JobTarget { Id = Guid.NewGuid(), UserId = userId, SourceText = "Vaga PostgreSQL" };
         var requirement = new JobRequirement { Id = Guid.NewGuid(), UserId = userId, JobTarget = target, Label = "PostgreSQL", ExactPhrases = ["PostgreSQL"] };
         var map = new ResumeEvidenceMapRun { Id = Guid.NewGuid(), UserId = userId, ResumeVersionId = version.Id, JobTargetId = target.Id };
-        var run = new ApplicationRun { Id = Guid.NewGuid(), UserId = userId, Name = "Histórico" };
-        var lead = new JobLead { Id = Guid.NewGuid(), UserId = userId, Title = "Oportunidade" };
-        db.AddRange(import, document, version, export, target, requirement, map, run, lead,
+        db.AddRange(import, document, version, export, target, requirement, map,
             new ResumeSection { Id = Guid.NewGuid(), UserId = userId, Version = version, ContentJson = "{\"text\":\"Experiência\"}" },
             new ResumeTailoringRun { Id = Guid.NewGuid(), UserId = userId, ResumeVersionId = version.Id, ResultJson = "{\"preserved\":true}" },
-            new ResumeRequirementEvidence { Id = Guid.NewGuid(), UserId = userId, Run = map, JobRequirementId = requirement.Id, EvidenceText = "Evidência original" },
-            new ApplicationJob { Id = Guid.NewGuid(), UserId = userId, ApplicationRun = run, JobLead = lead, ResumeVersionId = version.Id, ResumeExportId = export.Id, ResumeFilePath = export.FilePath });
+            new ResumeRequirementEvidence { Id = Guid.NewGuid(), UserId = userId, Run = map, JobRequirementId = requirement.Id, EvidenceText = "Evidência original" });
         await db.SaveChangesAsync();
         return new ResumeReviewAnswer { Id = Guid.NewGuid(), UserId = userId, JobRequirementId = requirement.Id, ResumeEvidenceMapRunId = map.Id, AnswerValue = "Experiência comprovada" };
     }
@@ -134,7 +131,8 @@ public sealed class PostgresMigrationTests
         var rows = new List<string>();
         foreach (var table in tables)
         {
-            await using var command = new NpgsqlCommand($"SELECT to_jsonb(t)::text FROM \"{table}\" t ORDER BY to_jsonb(t)::text", connection);
+            // JobLeadId was dropped on purpose by RemoveLegacyAgentRuntime; every other column must be preserved.
+            await using var command = new NpgsqlCommand($"SELECT (to_jsonb(t) - 'JobLeadId')::text FROM \"{table}\" t ORDER BY (to_jsonb(t) - 'JobLeadId')::text", connection);
             await using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync()) rows.Add(table + ":" + reader.GetString(0));
         }

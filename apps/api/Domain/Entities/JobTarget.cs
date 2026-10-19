@@ -4,7 +4,6 @@ public class JobTarget
 {
     public Guid Id { get; set; }
     public Guid UserId { get; set; }
-    public Guid? JobLeadId { get; set; }
     public string SourceKind { get; set; } = "manual_text";
     public string SourceText { get; set; } = "";
     public string SourceUrl { get; set; } = "";

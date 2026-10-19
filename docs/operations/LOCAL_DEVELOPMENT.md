@@ -7,11 +7,6 @@
 - Docker with Compose
 - Ollama local (opcional, para análise com IA — veja seção Ollama abaixo)
 
-> A extensão do navegador foi **removida do produto** (código, protocolo,
-> tabelas e configurações de pareamento/CORS). Não há nada para instalar,
-> parear ou configurar. O runtime `apps/agent` segue como legado em quarentena
-> e **não** é necessário para rodar o MVP.
-
 ## Start
 
 O atalho recomendado gera segredos dev, configura `JOBPILOT_POSTGRES_PASSWORD` e

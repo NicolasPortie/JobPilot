@@ -13,5 +13,4 @@ public record ResumeProfileImportData(
     string ProfessionalSummary,
     string[] Skills,
     string TargetRole,
-    string Seniority,
-    ResumeScreeningAnswer[] Answers);
+    string Seniority);

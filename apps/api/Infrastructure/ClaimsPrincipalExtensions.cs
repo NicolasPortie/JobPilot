@@ -7,10 +7,4 @@ public static class ClaimsPrincipalExtensions
         Guid.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)
                    ?? principal.FindFirstValue("sub")
                    ?? throw new InvalidOperationException("Missing user id claim."));
-
-    public static Guid AgentUserId(this ClaimsPrincipal principal)
-    {
-        var userId = principal.FindFirstValue("user_id");
-        return userId is not null ? Guid.Parse(userId) : principal.UserId();
-    }
 }

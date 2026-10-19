@@ -43,7 +43,6 @@ public sealed class JobTargetService(JobPilotDbContext db, IAiChatService ai, Re
         {
             Id = Guid.NewGuid(),
             UserId = userId,
-            JobLeadId = source.JobLeadId,
             SourceKind = source.Kind,
             SourceText = source.Text,
             SourceUrl = source.Url,
@@ -109,7 +108,7 @@ public sealed class JobTargetService(JobPilotDbContext db, IAiChatService ai, Re
             var sourceText = string.IsNullOrWhiteSpace(ocrResult.Text)
                 ? "Screenshot/PDF de vaga enviado pelo usuario. Extraia os requisitos somente do anexo visual."
                 : ocrResult.Text;
-            return new ResolvedJobSource("image_ocr", sourceText, "", "", "", "", null, attachment is null ? [] : [attachment], []);
+            return new ResolvedJobSource("image_ocr", sourceText, "", "", "", "", attachment is null ? [] : [attachment], []);
         }
 
         if (kind == "url")
@@ -119,14 +118,6 @@ public sealed class JobTargetService(JobPilotDbContext db, IAiChatService ai, Re
             return await urlExtraction.ResolveAsync(url, manualText);
         }
 
-        if (kind == "browser_capture")
-        {
-            var text = request.Text?.Trim() ?? "";
-            if (text.Length < 500)
-                throw new InvalidOperationException("Captura da vaga insuficiente. Abra a vaga completa no Chrome e tente novamente.");
-            return new ResolvedJobSource("browser_capture", text, request.Url?.Trim() ?? "", "", "", "", null, [], []);
-        }
-
         return new ResolvedJobSource(
             kind,
             request.Text?.Trim() ?? "",
@@ -134,7 +125,6 @@ public sealed class JobTargetService(JobPilotDbContext db, IAiChatService ai, Re
             "",
             "",
             "",
-            null,
             [],
             []);
     }
@@ -208,7 +198,6 @@ public sealed class JobTargetService(JobPilotDbContext db, IAiChatService ai, Re
         var warnings = ParseStringArray(target.WarningsJson);
         return new JobTargetDetail(
             target.Id,
-            target.JobLeadId,
             target.SourceKind,
             target.SourceUrl,
             target.Title,
@@ -234,7 +223,7 @@ public sealed class JobTargetService(JobPilotDbContext db, IAiChatService ai, Re
     }
 
     private static string NormalizeSourceKind(string value) =>
-        NormalizeOneOf(value, ["manual_text", "url", "image_ocr", "browser_capture"], "manual_text");
+        NormalizeOneOf(value, ["manual_text", "url", "image_ocr"], "manual_text");
 
     private static string NormalizeOneOf(string value, string[] allowed, string fallback)
     {

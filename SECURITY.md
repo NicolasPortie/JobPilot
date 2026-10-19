@@ -23,11 +23,8 @@ encrypted with the JWT key may be read only during an explicitly configured
 migration (`Security__AllowLegacyJwtDataProtection=true`) and should be
 re-encrypted or removed before that flag is disabled.
 
-Never commit secrets. Use environment variables or .NET user-secrets. Keep
-`/api/automation` disabled; legacy agent code is quarantine-only
-until a separate security review authorizes a new product surface. The browser
-extension was removed entirely: there is no `chrome-extension://` CORS origin,
-no pairing flow, and no `api/extension/*` route.
+Never commit secrets. Use environment variables or .NET user-secrets. The
+product has no browser extension, no automation runtime and no pairing flow.
 
 Uploads are private, capped at 10 MB, checked against basic file signatures and
 stored with server-generated names. DOCX packages are bounded before parsing,
@@ -42,10 +39,7 @@ refresh tokens (`POST /api/auth/refresh`, 7 days); reuse of a rotated token is
 rejected and `POST /api/auth/logout` revokes. Five invalid logins lock the
 account for 15 minutes. To rotate server keys, change `Auth__JwtKey` and
 `Security__SecretKey` (independent, 32+ chars) and restart: sessions and
-data-protection payloads re-issue on next login. Legacy agent routes stay
-behind the `LegacyRuntime` policy; user tokens only carry the
-`legacy_runtime` claim when `Features:EnableLegacyRuntime=true`, which must
-stay `false` in any shared environment.
+data-protection payloads re-issue on next login.
 
 External AI providers must use HTTPS and resolve to public addresses; hosts
 outside the built-in allowlist (OpenAI, Anthropic, Kimi) need

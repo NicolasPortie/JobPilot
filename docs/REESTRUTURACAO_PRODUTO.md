@@ -28,10 +28,10 @@ O JobPilot não deve controlar mouse, teclado, DOM ou abas; fazer login em Linke
 |---|---|---|
 | `App.tsx` e `useJobPilotApp` conheciam todos os domínios | estado global e `refresh()` viravam um segundo backend | manter apenas perfil, busca, vagas e currículo no fluxo web |
 | busca iniciava agente/processo externo | erro de produto e risco operacional para uma ação simples | salvar intenção; analisar a vaga quando o usuário a trouxer |
-| agente, extensão e API compartilhavam responsabilidades | fronteiras difíceis de testar e autorização frágil | legado em quarentena, sem dependência do MVP |
-| credenciais de plataforma eram persistidas/decriptadas | uma falha na API poderia comprometer a conta externa | retirar da experiência e bloquear rotas |
+| agente, extensão e API compartilhavam responsabilidades | fronteiras difíceis de testar e autorização frágil | removido do repositório |
+| credenciais de plataforma eram persistidas/decriptadas | uma falha na API poderia comprometer a conta externa | removido do repositório |
 | score aparecia como nota sem fonte | incentiva otimização cega e pode inventar experiência | aderência explicável por evidências, cobertura e confiança |
-| respostas, aprendizados, runs, checkpoints e trace eram produto | eram ferramentas internas de automação, não valor principal | remover do bundle principal; manter só para migração/testes |
+| respostas, aprendizados, runs, checkpoints e trace eram produto | eram ferramentas internas de automação, não valor principal | removido do repositório |
 | defaults assumiam `.NET`, Júnior e Remoto | personalização falsa e difícil de reutilizar | defaults neutros; preferências do usuário são fonte de verdade |
 | CPF, `ResumePath`, `FilePath` e URLs internas circulavam em DTOs | vazamento de PII e acoplamento ao filesystem | contratos públicos reduzidos a dados necessários e IDs opacos |
 | login social, cadastro, recuperação e claims de 24/7 eram placeholders | a UI prometia recursos que não existiam | remover da experiência até haver implementação real |
@@ -44,7 +44,6 @@ O JobPilot não deve controlar mouse, teclado, DOM ou abas; fazer login em Linke
 - análise de vaga com requisitos, evidências, importância, confiança e avisos;
 - aderência do currículo com fatos comprovados, termos relacionados, lacunas e perguntas;
 - editor de seções, versões ATS-safe, diff e exportação PDF/DOCX/TXT;
-- API de automação respondendo `410 Gone`, fora do OpenAPI principal;
 - DTOs públicos sem CPF, caminhos físicos, senha, token ou campos de automação;
 - caminhos de OCR criados pelo servidor e validados na área privada do usuário;
 - egress com bloqueio de rede privada/loopback, redirects controlados, limites de resposta e allowlist de IA;
@@ -138,7 +137,7 @@ Regras:
 
 ### Compatibilidade temporária
 
-As tabelas de agente, aplicação, credenciais, respostas e trace podem continuar nas migrações enquanto dados existentes são identificados. Elas não devem receber novos writes do fluxo web. As tabelas da extensão (`BrowserExtensionSessions`, `BrowserExtensionCommandJobs`) foram removidas pela migration `RemoveExtensionProtocol`.
+As tabelas de agente, aplicação, credenciais, respostas e trace foram removidas pela migration `RemoveLegacyAgentRuntime`, e as da extensão (`BrowserExtensionSessions`, `BrowserExtensionCommandJobs`) pela migration `RemoveExtensionProtocol`.
 
 Ordem segura:
 
@@ -147,7 +146,7 @@ Ordem segura:
 3. exportar dados que tenham valor para histórico;
 4. migrar oportunidades, versões e status manuais;
 5. testar dois usuários e downloads;
-6. remover controllers, serviços, tabelas e projetos legados em uma mudança separada;
+6. remover controllers, serviços, tabelas e projetos legados;
 7. executar migração fora do boot produtivo, com backup e rollback.
 
 ## 7. UX/UI premium e não genérica
@@ -178,7 +177,6 @@ Estrutura das telas:
 - `Auth:JwtKey` e `Security:SecretKey` independentes, com rotação documentada;
 - fallback de criptografia legado somente com flag explícita de migração;
 - produção sem origem genérica de extensão (removida) e sem pareamento local não autenticado (removido);
-- JWT de agente sem acesso por padrão; runtime legado desligado;
 - uploads fora da raiz pública, nomes opacos por usuário, limites de tamanho, validação de assinatura/pacote e limpeza em falha;
 - assinatura real de PDF/DOCX, antivírus e retenção antes de abrir uma instalação pública;
 - URL de vaga e links públicos com HTTPS, DNS/IP privado bloqueado, redirect seguro, timeout e limite de bytes;
@@ -188,10 +186,6 @@ Estrutura das telas:
 - rate limit em login, upload, análise, exportação e limite global por usuário/IP;
 - exclusão de conta/dados e TTL para originais, texto, prompts, respostas e exports;
 - testes de IDOR para perfil, vaga, documento, versão, seção, evidência e exportação.
-
-### Superfícies legadas
-
-`/api/automation/*` está desativado com `410 Gone`. Controllers de agente, credenciais e rascunho de resposta estão fora do OpenAPI ou exigem `LegacyRuntime`; o runtime fica `false` por padrão. Isso é uma barreira de migração, não uma promessa de suporte. A extensão foi removida por completo: `api/extension/*` não existe mais (retorna `404`).
 
 ## 9. Qualidade e observabilidade
 
@@ -214,7 +208,7 @@ O orçamento de linhas é apenas alerta. A métrica principal é responsabilidad
 2. navegação e bundle web — concluídos para o fluxo principal;
 3. contratos públicos e limites de segurança — implementados, com antivírus e política de retenção de currículos como próximo hardening;
 4. fluxo vaga → aderência → currículo → exportação — implementado;
-5. limpar/migrar entidades e serviços legados — em andamento;
+5. limpar/migrar entidades e serviços legados — concluído;
 6. melhorar velocidade do trabalho com comparação lado a lado, histórico/undo e notas manuais;
 7. somente com uso comprovado, avaliar captura somente leitura e opt-in — nunca automação de candidatura.
 
@@ -238,5 +232,4 @@ A reestruturação está correta quando uma pessoa consegue:
 - `docs/ARCHITECTURE.md` — fronteiras técnicas atuais;
 - `docs/ROADMAP.md` — próximos incrementos e futuro permitido;
 - `SECURITY.md` — requisitos de segurança;
-- `docs/ATS_RESUME_PRODUCT_PLAN.md` — regras de currículo, evidência e exportação;
-- documentos de automação, agente e extensão — históricos, não critérios de aceite.
+- `docs/ats/README.md` — regras de currículo, evidência e exportação.

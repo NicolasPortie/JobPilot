@@ -5,7 +5,6 @@ public class ResumeVersion
     public Guid Id { get; set; }
     public Guid UserId { get; set; }
     public Guid ResumeDocumentId { get; set; }
-    public Guid? JobLeadId { get; set; }
     public string Title { get; set; } = "";
     public string TargetCompany { get; set; } = "";
     public string TargetRole { get; set; } = "";

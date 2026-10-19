@@ -353,4 +353,4 @@ internal static class JobTargetAnalyzer
 
 }
 
-public sealed record ResolvedJobSource(string Kind, string Text, string Url, string Title, string Company, string Location, Guid? JobLeadId, AiInputAttachment[] Attachments, string[] Warnings);
+public sealed record ResolvedJobSource(string Kind, string Text, string Url, string Title, string Company, string Location, AiInputAttachment[] Attachments, string[] Warnings);

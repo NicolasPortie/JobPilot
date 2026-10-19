@@ -146,7 +146,8 @@ public sealed class ResumeTailoringService(JobPilotDbContext db, ResumeEvidenceM
             warnings,
             ResumeTailoringAnalyzer.ToVersionDetail(tailored),
             aiResult is not null,
-            attempt.Notice);
+            attempt.Notice,
+            ResumeAnalysisSummaryBuilder.ForTarget(score, evidenceMap, profile?.Skills ?? [], baseVersion.Sections));
     }
 
     public async Task<TailoredResumeResponse> BuildGenericAtsAsync(Guid userId, BuildGenericAtsResumeRequest request)
@@ -254,7 +255,8 @@ public sealed class ResumeTailoringService(JobPilotDbContext db, ResumeEvidenceM
             warnings,
             ResumeTailoringAnalyzer.ToVersionDetail(atsVersion),
             aiResult is not null,
-            attempt.Notice);
+            attempt.Notice,
+            ResumeAnalysisSummaryBuilder.ForGeneric(atsVersion.AtsScore));
     }
 
     private async Task<AiAttempt> TryGenerateWithAiAsync(

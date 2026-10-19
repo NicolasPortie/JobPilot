@@ -1,16 +1,4 @@
-import type { JobRequirementDto, ResumeSection } from '../../types'
-
-export type RequirementStatus = 'direct' | 'adjacent' | 'missing'
-
-export type RequirementReviewItem = JobRequirementDto & {
-  status: RequirementStatus
-}
-
-export function initials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return ''
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-}
+import type { ResumeSection } from '../../types'
 
 // Leitura somente-exibicao do contentJson das secoes (mesmos campos do editor).
 export function sectionItems(sections: ResumeSection[], type: string): Record<string, string>[] {

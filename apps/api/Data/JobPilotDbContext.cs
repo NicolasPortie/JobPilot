@@ -39,6 +39,7 @@ public class JobPilotDbContext(DbContextOptions<JobPilotDbContext> options) : Db
     public DbSet<QuestionPattern> QuestionPatterns => Set<QuestionPattern>();
     public DbSet<JobFilter> JobFilters => Set<JobFilter>();
     public DbSet<ProfileValidationRule> ProfileValidationRules => Set<ProfileValidationRule>();
+    public DbSet<ProfileSkillRecommendation> ProfileSkillRecommendations => Set<ProfileSkillRecommendation>();
     public DbSet<PlatformCredential> PlatformCredentials => Set<PlatformCredential>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -92,6 +93,7 @@ public class JobPilotDbContext(DbContextOptions<JobPilotDbContext> options) : Db
         modelBuilder.Entity<QuestionPattern>().HasIndex(x => new { x.UserId, x.PatternKey }).IsUnique();
         modelBuilder.Entity<JobFilter>().HasIndex(x => x.UserId).IsUnique();
         modelBuilder.Entity<ProfileValidationRule>().HasIndex(x => new { x.UserId, x.FieldName }).IsUnique();
+        modelBuilder.Entity<ProfileSkillRecommendation>().HasIndex(x => new { x.UserId, x.CreatedAt });
         modelBuilder.Entity<ApplicationRun>()
             .HasMany(x => x.Jobs)
             .WithOne(x => x.ApplicationRun)

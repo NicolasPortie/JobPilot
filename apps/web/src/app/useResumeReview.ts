@@ -1,6 +1,5 @@
 import { profileClient } from '../api/profileClient'
 import { resumeClient } from '../api/resumeClient'
-import type { AtsProfileSkillAddition } from '../types'
 import type { ResumeWorkflowState } from './resumeWorkflowModels'
 import { responseMessage } from './utils'
 
@@ -78,34 +77,26 @@ export function useResumeReview(state: ResumeWorkflowState) {
     }
   }
 
+  /** O servidor decide se a habilidade já existe, normaliza a lista e guarda o histórico da recomendação. */
   async function addProfileSkill(skill: string, context?: { kind?: 'missing' | 'related'; reason?: string }) {
     const clean = skill.trim()
     if (!clean) return
-    const exists = state.profile.skills.some((item) => item.trim().toLowerCase() === clean.toLowerCase())
-    if (exists) {
-      state.setAtsResumeNotice(`${clean} ja esta no perfil.`)
-      return
-    }
-    const nextProfile = {
-      ...state.profile,
-      skills: [...state.profile.skills, clean].sort((left, right) => left.localeCompare(right)),
-    }
-    await profileClient.save(nextProfile)
-    state.setProfile(nextProfile)
-    state.setRecommendedSkillAdditions((current) => {
-      const addition: AtsProfileSkillAddition = {
-        id: `${Date.now()}-${clean.toLowerCase().replace(/[^a-z0-9]+/gi, '-')}`,
+    try {
+      const { data } = await profileClient.addSkill({
         skill: clean,
-        kind: context?.kind ?? 'missing',
-        reason: context?.reason ?? 'Adicionada a partir de uma recomendacao ATS.',
-        jobTitle: state.atsJobTarget?.title ?? '',
-        company: state.atsJobTarget?.company ?? '',
-        createdAt: new Date().toISOString(),
-      }
-      return [addition, ...current.filter((item) => item.skill.trim().toLowerCase() !== clean.toLowerCase())].slice(0, 50)
-    })
-    state.setAtsResumeNotice(`${clean} adicionado ao perfil. Gere o currículo novamente para recalcular a nota.`)
-    await state.refresh('resume')
+        kind: context?.kind,
+        reason: context?.reason,
+        jobTitle: state.atsJobTarget?.title,
+        company: state.atsJobTarget?.company,
+      })
+      state.setProfile((current) => ({ ...current, ...data.profile }))
+      state.setAtsResumeNotice(data.alreadyPresent
+        ? `${clean} já está no perfil.`
+        : `${clean} adicionado ao perfil. Gere o currículo novamente para recalcular a nota.`)
+      await state.refresh()
+    } catch (error: unknown) {
+      state.setAtsResumeNotice(responseMessage(error, 'Não foi possível adicionar a habilidade ao perfil.'))
+    }
   }
 
   return {

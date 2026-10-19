@@ -6,6 +6,7 @@ namespace JobPilot.Api.Services;
 
 public sealed class CandidateProfileService(
     IRepository<CandidateProfile> profiles,
+    IRepository<ProfileSkillRecommendation> recommendations,
     IRepository<ProfileValidationRule> rules,
     IUnitOfWork unitOfWork,
     ProfileGuard guard)
@@ -30,6 +31,59 @@ public sealed class CandidateProfileService(
         profile.Apply(ToEntity(request, profile.Cpf, profile.ResumePath));
         await unitOfWork.SaveChangesAsync();
         return CandidateProfileResponse.From(profile);
+    }
+
+    /// <summary>Leva uma habilidade para o perfil (sem duplicar) e guarda de qual análise ela veio.</summary>
+    public async Task<AddProfileSkillResponse> AddSkillAsync(Guid userId, AddProfileSkillRequest request)
+    {
+        var skill = request.Skill.Trim();
+        var profile = await profiles.FirstOrDefaultAsync(candidate => candidate.UserId == userId);
+        if (profile is null)
+        {
+            profile = new CandidateProfile { Id = Guid.NewGuid(), UserId = userId };
+            profiles.Add(profile);
+        }
+
+        var alreadyPresent = profile.Skills.Any(item => string.Equals(item.Trim(), skill, StringComparison.OrdinalIgnoreCase));
+        if (!alreadyPresent)
+        {
+            profile.Skills = NormalizeSkills([.. profile.Skills, skill]).Order(StringComparer.CurrentCultureIgnoreCase).ToArray();
+            profile.UpdatedAt = DateTimeOffset.UtcNow;
+
+            var previous = await recommendations.ListAsync(item => item.UserId == userId);
+            foreach (var item in previous.Where(item => string.Equals(item.Skill, skill, StringComparison.OrdinalIgnoreCase)))
+                recommendations.Remove(item);
+            recommendations.Add(new ProfileSkillRecommendation
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                Skill = skill,
+                Kind = request.Kind ?? "missing",
+                Reason = string.IsNullOrWhiteSpace(request.Reason) ? "Adicionada a partir de uma recomendação da análise." : request.Reason.Trim(),
+                JobTitle = request.JobTitle?.Trim() ?? "",
+                Company = request.Company?.Trim() ?? "",
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+            await unitOfWork.SaveChangesAsync();
+        }
+
+        return new AddProfileSkillResponse(CandidateProfileResponse.From(profile), alreadyPresent);
+    }
+
+    public async Task<List<ProfileSkillRecommendationResponse>> ListSkillRecommendationsAsync(Guid userId) =>
+        (await recommendations.ListAsync(item => item.UserId == userId))
+        .OrderByDescending(item => item.CreatedAt)
+        .Take(50)
+        .Select(item => new ProfileSkillRecommendationResponse(item.Id, item.Skill, item.Kind, item.Reason, item.JobTitle, item.Company, item.CreatedAt))
+        .ToList();
+
+    public async Task<bool> RemoveSkillRecommendationAsync(Guid userId, Guid id)
+    {
+        var item = await recommendations.FirstOrDefaultAsync(candidate => candidate.Id == id && candidate.UserId == userId);
+        if (item is null) return false;
+        recommendations.Remove(item);
+        await unitOfWork.SaveChangesAsync();
+        return true;
     }
 
     public async Task<ProfileValidationResult> ValidateAsync(Guid userId)
@@ -88,18 +142,30 @@ public sealed class CandidateProfileService(
             Email = request.Email,
             Phone = request.Phone,
             City = request.City,
-            State = request.State,
+            State = NormalizeState(request.State),
             Country = request.Country,
             LinkedinUrl = request.LinkedinUrl,
             GithubUrl = request.GithubUrl,
             PortfolioUrl = request.PortfolioUrl,
             ProfessionalSummary = request.ProfessionalSummary,
-            Skills = request.Skills,
+            Skills = NormalizeSkills(request.Skills),
             TargetRole = request.TargetRole,
             Seniority = request.Seniority,
             SalaryExpectation = request.SalaryExpectation,
             ResumePath = resumePath
         };
+
+    /// <summary>UF em maiúsculas, só letras, no máximo duas.</summary>
+    private static string NormalizeState(string? state) =>
+        new(state?.Where(char.IsLetter).Take(2).Select(char.ToUpperInvariant).ToArray() ?? []);
+
+    /// <summary>Remove espaços e itens vazios ou repetidos, mantendo a ordem informada.</summary>
+    private static string[] NormalizeSkills(IEnumerable<string>? skills) =>
+        (skills ?? [])
+        .Select(skill => skill?.Trim() ?? "")
+        .Where(skill => skill.Length > 0)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
 
     private static ProfileValidationRule BuildRule(Guid userId, ProfileValidationRuleRequest request)
     {

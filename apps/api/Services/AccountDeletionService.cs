@@ -53,6 +53,7 @@ public sealed class AccountDeletionService(
         await RemoveWhereAsync(db.QuestionPatterns.Where(x => x.UserId == userId), db.QuestionPatterns, cancellationToken);
         await RemoveWhereAsync(db.JobFilters.Where(x => x.UserId == userId), db.JobFilters, cancellationToken);
         await RemoveWhereAsync(db.ProfileValidationRules.Where(x => x.UserId == userId), db.ProfileValidationRules, cancellationToken);
+        await RemoveWhereAsync(db.ProfileSkillRecommendations.Where(x => x.UserId == userId), db.ProfileSkillRecommendations, cancellationToken);
         await RemoveWhereAsync(db.PlatformCredentials.Where(x => x.UserId == userId), db.PlatformCredentials, cancellationToken);
         await RemoveWhereAsync(db.AgentPolicies.Where(x => x.UserId == userId), db.AgentPolicies, cancellationToken);
         await RemoveWhereAsync(db.AgentDevices.Where(x => x.UserId == userId), db.AgentDevices, cancellationToken);

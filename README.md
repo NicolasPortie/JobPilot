@@ -80,14 +80,14 @@ dotnet user-secrets set "Auth:SeedEmail" "seu-email-local@example.com" --project
 dotnet user-secrets set "Auth:SeedPassword" "uma-senha-local-forte" --project apps\api
 ```
 
-A IA (opcional) escolhe o provedor nesta ordem: configuração local, provedor salvo cuja chave ainda pode ser lida e Ollama local. Para usar um provedor externo:
+A IA (opcional) se configura pela aba **Configurações** do app: escolha o provedor, informe endereço, modelo e chave (guardada criptografada, nunca devolvida à tela) e use **Testar conexão**. O provedor escolhido ali vence a configuração do servidor, que vence o Ollama local. A configuração do servidor serve de padrão para quem não usa a tela:
 
 ```powershell
 dotnet user-secrets set "Ai:Provider" "anthropic" --project apps\api   # ou openai, kimi
 dotnet user-secrets set "Ai:ApiKey" "<sua-chave>" --project apps\api
 ```
 
-`Ai:Provider` + `Ai:ApiKey` vencem a configuração antiga `Kimi:ApiKey`/`KIMI_API_KEY`, que só vale quando `Ai:*` não está definido. E-mail e telefone não vão no prompt da IA: são trocados por marcadores e restaurados na resposta. Se o texto da IA for descartado (tecnologia sem evidência, contato sumido ou IA fora do ar), a tela diz o motivo e o currículo sai sem IA. O controle "Usar IA" da tela mostra se o provedor está respondendo; sem IA, o JobPilot gera o currículo de forma determinística, sem inventar conteúdo. Texto da IA é descartado se citar tecnologia que não está no seu currículo.
+Para um gateway compatível com OpenAI (ex.: OmniRoute em HTTPS), use `Ai:Provider=openai` com `Ai:BaseUrl` (terminando em `/v1`), `Ai:Model`, `Ai:Name` (rótulo na tela) e `Ai:AllowedHosts` (o host do gateway); a chave vai em `Ai:ApiKey`. Endereços `http://` ou de rede privada (`192.168.x.x`) são recusados de propósito. `Ai:Provider` + `Ai:ApiKey` vencem a configuração antiga `Kimi:ApiKey`/`KIMI_API_KEY`, que só vale quando `Ai:*` não está definido. E-mail e telefone não vão no prompt da IA: são trocados por marcadores e restaurados na resposta. Se o texto da IA for descartado (tecnologia sem evidência, contato sumido ou IA fora do ar), a tela diz o motivo e o currículo sai sem IA. O controle "Usar IA" da tela mostra se o provedor está respondendo; sem IA, o JobPilot gera o currículo de forma determinística, sem inventar conteúdo. Texto da IA é descartado se citar tecnologia que não está no seu currículo.
 
 `Security:SecretKey` é independente da chave JWT. O runtime legado fica desligado por padrão (`Features:EnableLegacyRuntime=false`) e não deve ser ativado em uma instalação de produção.
 

@@ -1,0 +1,469 @@
+/* ==========================================================================
+   JobPilot — páginas internas (Candidaturas, Perfil, Configurações)
+   Mesmo vocabulário visual da tela de Currículo: cards brancos, terracota,
+   campos .cv-input e botões .cv-btn. Nada aqui é específico de uma página.
+   ========================================================================== */
+
+.cv-pagebody {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
+.cv-grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.cv-col {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+  min-width: 0;
+}
+
+/* Cabeçalho de seção: ícone, título e ação, como nos passos do Currículo */
+.cv-sectionhead {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.cv-sectionhead__icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: #f9e4cc;
+  color: #bc4a21;
+}
+
+.cv-sectionhead__action {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.cv-sectionbody {
+  margin-top: 16px;
+}
+
+.cv-form {
+  display: grid;
+  gap: 14px;
+}
+
+.cv-formrow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px;
+}
+
+.cv-formrow--uf {
+  grid-template-columns: minmax(0, 3fr) minmax(70px, 1fr);
+}
+
+.cv-label--row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cv-label__aux {
+  margin-left: auto;
+  font-weight: 500;
+  color: #857263;
+}
+
+.cv-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237c6f60' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='m6 9 6 6 6-6'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+.cv-textarea--tall {
+  min-height: 132px;
+}
+
+.cv-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #241b12;
+}
+
+.cv-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--cv-brand);
+}
+
+.cv-check input:focus-visible {
+  outline: 2px solid var(--cv-brand);
+  outline-offset: 3px;
+}
+
+.cv-alert--red {
+  background: #fdeee9;
+  border: 1px solid #efc4b6;
+  color: #8c2f12;
+}
+
+.cv-alert--green {
+  background: #e9f6ee;
+  border: 1px solid #bfe2cc;
+  color: #1f6a3d;
+}
+
+.cv-btn--ghost {
+  background: transparent;
+  color: #6d3a1c;
+}
+
+.cv-btn--ghost:hover:not(:disabled) {
+  background: rgb(188 74 33 / 0.07);
+}
+
+.cv-btn--danger {
+  background: #fffdf8;
+  border-color: #e9b8a6;
+  color: #a03a15;
+}
+
+.cv-btn--danger:hover:not(:disabled) {
+  background: #fdeee9;
+  border-color: #c8501f;
+}
+
+.cv-btn--block {
+  width: 100%;
+}
+
+/* Faixa de resumo no topo das páginas de formulário */
+.cv-summarybar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 18px;
+}
+
+.cv-statusline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #6f6252;
+}
+
+.cv-issues {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.cv-issue {
+  background: rgb(255 255 255 / 0.75);
+  border: 1px solid #f0d9ac;
+  border-radius: 10px;
+  padding: 9px 12px;
+}
+
+.cv-issue--critical {
+  border-color: #efc4b6;
+}
+
+.cv-issue__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.cv-issue__text {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+.cv-importbox {
+  border: 1px solid #efe0c8;
+  border-radius: 12px;
+  background: #fffdf7;
+  padding: 14px;
+}
+
+.cv-filebtn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px dashed #d9bd95;
+  border-radius: 12px;
+  background: #fffdf8;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6f6252;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.cv-filebtn:hover,
+.cv-filebtn:focus-within {
+  border-color: #bc4a21;
+  background: #fff7ec;
+}
+
+/* Lista de itens (recomendações, resultados) */
+.cv-list {
+  display: grid;
+  gap: 10px;
+}
+
+.cv-listitem {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid #efe0c8;
+  border-radius: 12px;
+  background: #fffdf8;
+  padding: 12px 14px;
+}
+
+.cv-listitem__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cv-listitem__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #241b12;
+}
+
+.cv-listitem__text {
+  margin-top: 4px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #6f6252;
+}
+
+.cv-listitem__meta {
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: #a89a86;
+}
+
+.cv-iconbtn {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  color: #857263;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.cv-iconbtn:hover:not(:disabled) {
+  background: #fdeee9;
+  color: #a03a15;
+}
+
+.cv-iconbtn:focus-visible {
+  outline: 2px solid var(--cv-brand);
+  outline-offset: 2px;
+}
+
+.cv-empty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  text-align: center;
+  border: 1px dashed #e2cfb0;
+  border-radius: 14px;
+  background: #fffdf8;
+  padding: 26px 18px;
+}
+
+.cv-empty__icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #f9e4cc;
+  color: #bc4a21;
+}
+
+.cv-empty__title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #241b12;
+}
+
+.cv-empty__text {
+  max-width: 420px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #857263;
+}
+
+.cv-prose {
+  font-size: 13px;
+  line-height: 1.65;
+  color: #6f6252;
+}
+
+.cv-statgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.cv-stat {
+  border: 1px solid #efe0c8;
+  border-radius: 12px;
+  background: #fffdf8;
+  padding: 10px 14px;
+}
+
+.cv-stat__value {
+  font-size: 20px;
+  font-weight: 800;
+  color: #241b12;
+}
+
+.cv-stat__label {
+  font-size: 11.5px;
+  color: #857263;
+}
+
+/* Menu da conta (chip do usuário) */
+.cv-usermenu {
+  position: relative;
+}
+
+.cv-userchip--button {
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.cv-userchip--button:hover,
+.cv-userchip--button[aria-expanded='true'] {
+  border-color: #d9bd95;
+  box-shadow: 0 6px 18px rgb(140 52 19 / 0.1);
+}
+
+.cv-userchip--button:focus-visible {
+  outline: 2px solid var(--cv-brand);
+  outline-offset: 2px;
+}
+
+.cv-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 50;
+  min-width: 220px;
+  display: grid;
+  gap: 2px;
+  background: #fffdf8;
+  border: 1px solid #efe0c8;
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgb(140 52 19 / 0.16);
+  padding: 6px;
+}
+
+.cv-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #241b12;
+  text-align: left;
+}
+
+.cv-menu__item:hover:not(:disabled),
+.cv-menu__item:focus-visible {
+  background: #f6e2cb;
+  outline: none;
+}
+
+.cv-menu__item:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.cv-menu__sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: #efe0c8;
+}
+
+.cv-helptext {
+  margin-left: 48px;
+  margin-top: 12px;
+  border-radius: 12px;
+  background: #fffaf1;
+  border: 1px solid #f0d9ac;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: #6f6252;
+}
+
+.cv-helptext ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+@media (max-width: 1023px) {
+  .cv-grid2 {
+    grid-template-columns: 1fr;
+  }
+
+  .cv-helptext {
+    margin-left: 0;
+  }
+}
+
+.cv-mini__chev {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+
+.cv-mini__chev:hover,
+.cv-mini__chev:focus-visible {
+  background: #f6e2cb;
+  outline: none;
+}

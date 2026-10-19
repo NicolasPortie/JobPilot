@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Download, ExternalLink, RefreshCw, Send } from 'lucide-react'
+import { Download, ExternalLink, FileText, ListChecks, RefreshCw, Send } from 'lucide-react'
 import { applicationsClient } from '../../api/applicationsClient'
 import { responseMessage, safeHttpUrl } from '../../app/utils'
+import { SectionCard } from '../../components/forms/SectionCard'
+import { EmptyState } from '../../components/data-display/EmptyState'
 import type { ApplicationHistoryItem } from '../../types'
 
 type Filter = 'all' | 'pending' | 'applied'
@@ -10,9 +12,10 @@ type Props = {
   exportBusy: boolean
   onDownload: (versionId: string, format: 'word' | 'pdf') => void
   onMarkApplied: (versionId: string, applied: boolean) => Promise<boolean | void> | boolean | void
+  onGoToResume: () => void
 }
 
-export function ApplicationsTab({ exportBusy, onDownload, onMarkApplied }: Props) {
+export function ApplicationsTab({ exportBusy, onDownload, onMarkApplied, onGoToResume }: Props) {
   const [items, setItems] = useState<ApplicationHistoryItem[]>([])
   const [filter, setFilter] = useState<Filter>('all')
   const [loading, setLoading] = useState(true)
@@ -48,32 +51,40 @@ export function ApplicationsTab({ exportBusy, onDownload, onMarkApplied }: Props
   const appliedCount = items.filter((item) => item.applied).length
 
   return (
-    <div className="cv-page" style={{ display: 'block' }}>
-      <section className="cv-card" aria-labelledby="cv-historico">
-        <div className="cv-row cv-row--between">
-          <div>
-            <h2 className="cv-steptitle" id="cv-historico">Candidaturas preparadas</h2>
-            <p className="cv-stepsub">{items.length === 0 ? 'Nenhum currículo adaptado ainda.' : `${items.length} currículos adaptados · ${appliedCount} enviados`}</p>
-          </div>
+    <div className="cv-pagebody">
+      <SectionCard
+        title="Histórico de candidaturas"
+        description={items.length === 0 ? 'Nenhum currículo adaptado ainda.' : `${items.length} ${items.length === 1 ? 'currículo adaptado' : 'currículos adaptados'} · ${appliedCount} ${appliedCount === 1 ? 'enviado' : 'enviados'}`}
+        icon={ListChecks}
+        action={
           <button className="cv-btn cv-btn--secondary cv-btn--small" onClick={() => void load()} disabled={loading} aria-busy={loading}>
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Atualizar
           </button>
-        </div>
-
-        <div className="cv-history__filters" role="group" aria-label="Filtrar candidaturas">
-          {([['all', 'Todas'], ['pending', 'A enviar'], ['applied', 'Enviadas']] as const).map(([key, label]) => (
-            <button key={key} className="cv-btn cv-btn--secondary cv-btn--small cv-history__filter" aria-pressed={filter === key} onClick={() => setFilter(key)}>
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {error && <div className="cv-alert cv-alert--amber" role="alert">{error}</div>}
-        {!error && !loading && visible.length === 0 && (
-          <p className="cv-history__empty">{items.length === 0 ? 'Gere um currículo na aba Currículo e ele aparece aqui.' : 'Nada neste filtro.'}</p>
+        }
+      >
+        {items.length > 0 && (
+          <div className="cv-history__filters" role="group" aria-label="Filtrar candidaturas">
+            {([['all', 'Todas'], ['pending', 'A enviar'], ['applied', 'Enviadas']] as const).map(([key, label]) => (
+              <button key={key} className="cv-btn cv-btn--secondary cv-btn--small cv-history__filter" aria-pressed={filter === key} onClick={() => setFilter(key)}>
+                {label}
+              </button>
+            ))}
+          </div>
         )}
 
-        <div className="cv-batch">
+        {error && <div className="cv-alert cv-alert--amber" role="alert">{error}</div>}
+        {!error && loading && items.length === 0 && <p className="cv-prose" role="status">Carregando…</p>}
+        {!error && !loading && items.length === 0 && (
+          <EmptyState
+            icon={FileText}
+            title="Nenhuma candidatura preparada"
+            description="Gere um currículo adaptado a uma vaga e ele aparece aqui, pronto para baixar e enviar."
+            action={<button className="cv-btn cv-btn--primary cv-btn--small" onClick={onGoToResume}>Adaptar um currículo</button>}
+          />
+        )}
+        {!error && !loading && items.length > 0 && visible.length === 0 && <p className="cv-history__empty">Nada neste filtro.</p>}
+
+        <div className="cv-batch" style={{ marginTop: 0 }}>
           {visible.map((item) => (
             <div key={item.resumeVersionId} className="cv-batch__item">
               <div className="cv-batch__body">
@@ -96,7 +107,7 @@ export function ApplicationsTab({ exportBusy, onDownload, onMarkApplied }: Props
             </div>
           ))}
         </div>
-      </section>
+      </SectionCard>
     </div>
   )
 }

@@ -1,17 +1,8 @@
-import { useState, type ComponentType, type ReactNode } from 'react'
-import {
-  ArrowRight,
-  ArrowUpRight,
-  FileText,
-  ListChecks,
-  LogOut,
-  Menu,
-  RefreshCw,
-  UserRound,
-  X,
-} from 'lucide-react'
+import { useEffect, useState, type ComponentType, type ReactNode } from 'react'
+import { AlertCircle, ArrowRight, FileText, ListChecks, LogOut, Menu, Settings, UserRound, X } from 'lucide-react'
 import { clsx } from 'clsx'
 import { WorkspaceEntrance } from './motion/WorkspaceEntrance'
+import { PageHeader, type PageHeaderInfo, type UserMeta } from './PageHeader'
 
 type NavItem = {
   id: string
@@ -20,28 +11,37 @@ type NavItem = {
   description: string
 }
 
-const navGroups: { label: string; items: NavItem[] }[] = [
-  {
-    label: 'Seu fluxo',
-    items: [
-      { id: 'resume', icon: FileText, label: 'Currículo', description: 'Adaptar e exportar' },
-      { id: 'applications', icon: ListChecks, label: 'Candidaturas', description: 'Histórico e envios' },
-      { id: 'profile', icon: UserRound, label: 'Perfil', description: 'Base profissional' },
-    ],
-  },
+const navItems: NavItem[] = [
+  { id: 'resume', icon: FileText, label: 'Currículo', description: 'Adaptar e exportar' },
+  { id: 'applications', icon: ListChecks, label: 'Candidaturas', description: 'Histórico e envios' },
+  { id: 'profile', icon: UserRound, label: 'Perfil', description: 'Base profissional' },
+  { id: 'settings', icon: Settings, label: 'Configurações', description: 'IA e preferências' },
 ]
 
-const pageInfo: Record<string, { eyebrow: string; title: string; description: string }> = {
-  resume: { eyebrow: 'Material de candidatura', title: 'Seu currículo, com contexto', description: 'Mantenha uma base verdadeira e adapte cada versão para a oportunidade certa.' },
-  applications: { eyebrow: 'Acompanhamento', title: 'Candidaturas preparadas', description: 'Baixe de novo o currículo de cada vaga, abra o anúncio e marque o que já enviou.' },
-  profile: { eyebrow: 'Base profissional', title: 'Tudo começa pelo seu repertório', description: 'Dados claros geram análises melhores e sugestões mais honestas.' },
+const pageInfo: Record<string, PageHeaderInfo> = {
+  resume: {
+    eyebrow: 'Currículo que te aproxima',
+    title: 'Adapte seu currículo para esta vaga',
+    description: 'Cole a vaga e receba, em segundos, uma versão verdadeira do seu currículo ajustada ao que ela pede. Você revisa, baixa o PDF e envia a candidatura.',
+  },
+  applications: {
+    eyebrow: 'Acompanhamento',
+    title: 'Candidaturas preparadas',
+    description: 'Baixe de novo o currículo de cada vaga, abra o anúncio e marque o que já enviou.',
+  },
+  profile: {
+    eyebrow: 'Base profissional',
+    title: 'Tudo começa pelo seu repertório',
+    description: 'Dados claros geram análises melhores e sugestões mais honestas.',
+  },
+  settings: {
+    eyebrow: 'Preferências',
+    title: 'Configurações',
+    description: 'Escolha a inteligência artificial que ajuda a escrever o currículo e teste a conexão.',
+  },
 }
 
-export type ResumeMeta = {
-  userName: string
-  userRole: string
-  completion: number
-}
+export type ResumeMeta = UserMeta
 
 export function AppLayout({ tab, setTab, onRefresh, onLogout, children, notice = '', refreshing = false, resumeMeta }: {
   tab: string
@@ -52,11 +52,16 @@ export function AppLayout({ tab, setTab, onRefresh, onLogout, children, notice =
   notice?: string
   refreshing?: boolean
   actionBusy?: boolean
-  resumeMeta?: ResumeMeta
+  resumeMeta: UserMeta
 }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const page = pageInfo[tab] ?? pageInfo.resume
-  const isCv = tab === 'resume'
+
+  // O fundo quente e a faixa lateral valem para todas as páginas autenticadas.
+  useEffect(() => {
+    document.body.classList.add('cv-fundo')
+    return () => document.body.classList.remove('cv-fundo')
+  }, [])
 
   const selectTab = (id: string) => {
     setTab(id)
@@ -64,8 +69,8 @@ export function AppLayout({ tab, setTab, onRefresh, onLogout, children, notice =
   }
 
   return (
-    <div className="jp-app-shell min-h-[100dvh] text-[var(--jp-text-primary)] lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
-      <Sidebar tab={tab} onSelect={selectTab} onLogout={onLogout} resumeMeta={resumeMeta} className="sticky top-0 hidden h-[100dvh] lg:flex" />
+    <div className="jp-app-shell min-h-[100dvh] text-[var(--cv-ink)] lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
+      <Sidebar tab={tab} onSelect={selectTab} onLogout={onLogout} completion={resumeMeta.completion} className="sticky top-0 hidden h-[100dvh] lg:flex" />
 
       {mobileOpen && (
         <div className="jp-mobile-scrim fixed inset-0 z-50 lg:hidden" onClick={() => setMobileOpen(false)}>
@@ -73,7 +78,7 @@ export function AppLayout({ tab, setTab, onRefresh, onLogout, children, notice =
             tab={tab}
             onSelect={selectTab}
             onLogout={onLogout}
-            resumeMeta={resumeMeta}
+            completion={resumeMeta.completion}
             className="h-full w-[min(88vw,328px)]"
             onClose={() => setMobileOpen(false)}
           />
@@ -82,7 +87,7 @@ export function AppLayout({ tab, setTab, onRefresh, onLogout, children, notice =
 
       <main className="w-full min-w-0 px-4 pb-8 pt-20 sm:px-6 lg:px-10 lg:py-8">
         <button
-          className="jp-mobile-menu fixed left-4 top-4 z-40 inline-flex size-11 items-center justify-center rounded-xl border border-[var(--jp-border)] bg-[var(--jp-surface)] text-[var(--jp-text-secondary)] shadow-[var(--jp-shadow-sm)] transition hover:border-[var(--jp-border-strong)] hover:text-[var(--jp-text-primary)] lg:hidden"
+          className="jp-mobile-menu fixed left-4 top-4 z-40 inline-flex size-11 items-center justify-center rounded-xl border border-[var(--cv-border)] bg-[var(--cv-card)] text-[var(--cv-muted)] shadow-[var(--cv-shadow)] transition hover:border-[var(--cv-border-strong)] hover:text-[var(--cv-ink)] lg:hidden"
           onClick={() => setMobileOpen(true)}
           aria-label="Abrir menu"
         >
@@ -91,24 +96,12 @@ export function AppLayout({ tab, setTab, onRefresh, onLogout, children, notice =
 
         <WorkspaceEntrance className="jp-workspace">
           <div className="jp-main-content">
-            {!(isCv && resumeMeta) && (
-            <header data-entrance className="jp-topbar mb-8 flex flex-col gap-5 border-b border-[var(--jp-border)] pb-6 sm:flex-row sm:items-end sm:justify-between">
-              <div className="min-w-0">
-                <p className="jp-eyebrow">{page.eyebrow}</p>
-                <h1 className="jp-page-title mt-2">{page.title}</h1>
-                <p className="jp-page-description mt-2">{page.description}</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-3">
-                <button className="jp-btn jp-btn--secondary jp-btn--compact disabled:opacity-60" onClick={onRefresh} title="Atualizar dados" disabled={refreshing} aria-busy={refreshing}>
-                  <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-                  <span className="hidden sm:inline">{refreshing ? 'Atualizando…' : 'Atualizar'}</span>
-                </button>
-                <div className="jp-user-mark" aria-label="Conta ativa">JP</div>
-              </div>
-            </header>
-            )}
+            <div data-entrance>
+              <PageHeader info={page} user={resumeMeta} refreshing={refreshing} onNavigate={selectTab} onRefresh={onRefresh} onLogout={onLogout} />
+            </div>
             {notice && (
-              <div className="jp-alert jp-alert--amber mb-6 text-sm" role="status">
+              <div className="cv-alert cv-alert--amber" style={{ marginBottom: 16 }} role="status">
+                <AlertCircle size={16} className="mt-0.5 shrink-0" />
                 {notice}
               </div>
             )}
@@ -122,137 +115,70 @@ export function AppLayout({ tab, setTab, onRefresh, onLogout, children, notice =
   )
 }
 
-function Sidebar({ tab, onSelect, onLogout, resumeMeta, className, onClose }: {
+function Sidebar({ tab, onSelect, onLogout, completion, className, onClose }: {
   tab: string
   onSelect: (id: string) => void
   onLogout: () => void
-  resumeMeta?: ResumeMeta
+  completion: number
   className?: string
   onClose?: () => void
 }) {
-  if ((tab === 'resume' || tab === 'applications') && resumeMeta) {
-    return (
-      <aside className={clsx('jp-sidebar flex flex-col px-3 pb-0 pt-5', className)} onClick={(event) => event.stopPropagation()}>
-        <div className="mb-2 flex items-center justify-between">
-          <div className="cv-s-brand">
-            <p className="cv-s-brand__logo">JobPilot</p>
-            <p className="cv-s-brand__tag">Sua carreira<br />com mais direção</p>
-          </div>
-          {onClose && (
-            <button className="grid size-9 shrink-0 place-items-center rounded-lg text-[var(--cv-muted)] transition hover:bg-[var(--cv-peach)] hover:text-[var(--cv-ink)]" onClick={onClose} aria-label="Fechar menu">
-              <X size={19} />
-            </button>
-          )}
-        </div>
-
-        <nav className="min-h-0 min-w-0 flex-1 overflow-y-auto pr-1 scrollbar-hide" aria-label="Navegação principal">
-          <div className="cv-s-nav">
-            <button className={clsx('cv-s-item', tab === 'resume' && 'cv-s-item--active')} onClick={() => onSelect('resume')} aria-current={tab === 'resume' ? 'page' : undefined}>
-              <span className="cv-s-item__icon"><FileText size={17} /></span>
-              <span className="min-w-0 flex-1">
-                <span className="cv-s-item__label">Currículo</span>
-                <span className="cv-s-item__desc">Adaptar e exportar</span>
-              </span>
-            </button>
-            <button className={clsx('cv-s-item', tab === 'applications' && 'cv-s-item--active')} onClick={() => onSelect('applications')} aria-current={tab === 'applications' ? 'page' : undefined}>
-              <span className="cv-s-item__icon"><ListChecks size={17} /></span>
-              <span className="min-w-0 flex-1">
-                <span className="cv-s-item__label">Candidaturas</span>
-                <span className="cv-s-item__desc">Histórico e envios</span>
-              </span>
-            </button>
-            <button className="cv-s-item" onClick={() => onSelect('profile')}>
-              <span className="cv-s-item__icon"><UserRound size={17} /></span>
-              <span className="min-w-0 flex-1">
-                <span className="cv-s-item__label">Perfil</span>
-                <span className="cv-s-item__desc">Base profissional</span>
-              </span>
-            </button>
-          </div>
-
-          <div className="cv-s-profile">
-            <p className="cv-s-profile__title">Perfil {resumeMeta.completion}% completo</p>
-            <div className="cv-s-profile__bar" role="progressbar" aria-valuenow={resumeMeta.completion} aria-valuemin={0} aria-valuemax={100} aria-label="Completude do perfil">
-              <div className="cv-s-profile__fill" style={{ width: resumeMeta.completion.toString() + '%' }} />
-            </div>
-            <p className="cv-s-profile__text">Complete seu perfil para receber recomendações mais precisas.</p>
-            <button className="cv-s-profile__link" onClick={() => onSelect('profile')}>
-              Completar perfil <ArrowRight size={14} />
-            </button>
-          </div>
-
-          <div className="cv-s-foot">
-            <button className="cv-s-item" onClick={onLogout}>
-              <span className="cv-s-item__icon"><LogOut size={17} /></span>
-              <span className="min-w-0 flex-1"><span className="cv-s-item__label">Sair da conta</span></span>
-            </button>
-          </div>
-        </nav>
-
-        <div className="cv-s-art" aria-hidden={false}>
-          <p className="cv-s-art__text">Grandes carreiras começam com boas decisões.</p>
-          <div className="cv-s-art__rule" />
-        </div>
-      </aside>
-    )
-  }
-
   return (
-    <aside className={clsx('jp-sidebar flex flex-col border-r border-[var(--jp-border)] px-3 py-4', className)} onClick={(event) => event.stopPropagation()}>
-      <div className="mb-8 flex items-center justify-between px-2">
-        <button className="group flex min-w-0 items-center gap-3 text-left" onClick={() => onSelect('resume')} aria-label="Abrir currículo">
-          <span className="jp-brand-mark"><ArrowUpRight size={18} strokeWidth={2.4} /></span>
-          <span className="min-w-0">
-            <span className="block truncate text-[16px] font-black tracking-[-0.03em] text-[var(--jp-text-primary)]">JobPilot</span>
-            <span className="mt-0.5 block truncate text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--jp-text-tertiary)]">career workspace</span>
-          </span>
-        </button>
-
+    <aside className={clsx('jp-sidebar flex flex-col px-3 pb-0 pt-5', className)} onClick={(event) => event.stopPropagation()}>
+      <div className="mb-2 flex items-center justify-between">
+        <div className="cv-s-brand">
+          <p className="cv-s-brand__logo">JobPilot</p>
+          <p className="cv-s-brand__tag">Sua carreira<br />com mais direção</p>
+        </div>
         {onClose && (
-          <button className="grid size-9 shrink-0 place-items-center rounded-lg text-[var(--jp-text-tertiary)] transition hover:bg-[var(--jp-surface-muted)] hover:text-[var(--jp-text-primary)]" onClick={onClose} aria-label="Fechar menu">
+          <button className="grid size-9 shrink-0 place-items-center rounded-lg text-[var(--cv-muted)] transition hover:bg-[var(--cv-peach)] hover:text-[var(--cv-ink)]" onClick={onClose} aria-label="Fechar menu">
             <X size={19} />
           </button>
         )}
       </div>
 
-      <nav className="min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-hide" aria-label="Navegação principal">
-        <div className="grid gap-8">
-          {navGroups.map((group) => (
-            <div key={group.label}>
-              <div className="jp-nav-label mb-2 px-3">{group.label}</div>
-              <div className="grid gap-1">
-                {group.items.map((item) => {
-                  const isActive = tab === item.id
-                  return (
-                    <button
-                      key={item.id}
-                      className={clsx('jp-nav-item group relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition', isActive && 'jp-nav-item--active')}
-                      onClick={() => onSelect(item.id)}
-                    >
-                      <span className="jp-nav-icon grid size-8 shrink-0 place-items-center rounded-lg transition">
-                        <item.icon size={16} strokeWidth={isActive ? 2.4 : 1.9} />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] font-extrabold">{item.label}</span>
-                        <span className="mt-0.5 block truncate text-[11px] font-semibold text-[var(--jp-text-tertiary)] group-hover:text-[var(--jp-text-secondary)]">{item.description}</span>
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+      <nav className="min-h-0 min-w-0 flex-1 overflow-y-auto pr-1 scrollbar-hide" aria-label="Navegação principal">
+        <div className="cv-s-nav">
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              className={clsx('cv-s-item', tab === item.id && 'cv-s-item--active')}
+              onClick={() => onSelect(item.id)}
+              aria-current={tab === item.id ? 'page' : undefined}
+            >
+              <span className="cv-s-item__icon"><item.icon size={17} /></span>
+              <span className="min-w-0 flex-1">
+                <span className="cv-s-item__label">{item.label}</span>
+                <span className="cv-s-item__desc">{item.description}</span>
+              </span>
+            </button>
           ))}
+        </div>
+
+        <div className="cv-s-profile">
+          <p className="cv-s-profile__title">Perfil {completion}% completo</p>
+          <div className="cv-s-profile__bar" role="progressbar" aria-valuenow={completion} aria-valuemin={0} aria-valuemax={100} aria-label="Completude do perfil">
+            <div className="cv-s-profile__fill" style={{ width: `${completion}%` }} />
+          </div>
+          <p className="cv-s-profile__text">Complete seu perfil para receber recomendações mais precisas.</p>
+          {tab !== 'profile' && (
+            <button className="cv-s-profile__link" onClick={() => onSelect('profile')}>
+              Completar perfil <ArrowRight size={14} />
+            </button>
+          )}
+        </div>
+
+        <div className="cv-s-foot">
+          <button className="cv-s-item" onClick={onLogout}>
+            <span className="cv-s-item__icon"><LogOut size={17} /></span>
+            <span className="min-w-0 flex-1"><span className="cv-s-item__label">Sair da conta</span></span>
+          </button>
         </div>
       </nav>
 
-      <div className="mt-8 border-t border-[var(--jp-border)] pt-4">
-        <div className="mb-3 rounded-xl bg-[var(--jp-surface-muted)] px-3 py-3">
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--jp-text-tertiary)]">Princípio do espaço</p>
-          <p className="mt-1 text-xs leading-5 text-[var(--jp-text-secondary)]">Clareza primeiro. Cada sugestão precisa ter uma fonte real.</p>
-        </div>
-        <button className="jp-btn jp-btn--ghost min-h-10 w-full justify-start px-3 text-xs" onClick={onLogout}>
-          <LogOut size={14} /> Sair da conta
-        </button>
+      <div className="cv-s-art">
+        <p className="cv-s-art__text">Grandes carreiras começam com boas decisões.</p>
+        <div className="cv-s-art__rule" />
       </div>
     </aside>
   )

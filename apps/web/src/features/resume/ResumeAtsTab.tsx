@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import {
   AlertCircle,
@@ -17,11 +17,10 @@ import {
 } from 'lucide-react'
 import { ResumeAiControl } from './ResumeAiControl'
 import { safeHttpUrl } from '../../app/utils'
-import { ResumeAtsHeader } from './ResumeAtsHeader'
+import { activeBaseVersion, selectableVersions } from '../../app/baseVersions'
 import { ResumeJobInput } from './ResumeJobInput'
 import { ResumeAtsPreview } from './ResumeAtsPreview'
 import { ResumeAtsInsights } from './ResumeAtsInsights'
-import type { RequirementReviewItem, RequirementStatus } from './resumeAtsPresentation'
 import { ResumeReviewCard } from './ResumeReviewCard'
 import { SectionEditorPanel } from '../profile/ProfileSectionEditor'
 import type {
@@ -30,6 +29,7 @@ import type {
   ProfileValidationIssue,
   QuickTailorItem,
   ResumeDocumentSummary,
+  RequirementStatus,
   ResumeLayoutOption,
   TailoredResume,
 } from '../../types'
@@ -113,16 +113,9 @@ export function ResumeAtsTab(props: Props) {
   const [textOverride, setTextOverride] = useState<string | null>(null)
   const [savingOutput, setSavingOutput] = useState(false)
 
-  const versions = documents.flatMap((document) =>
-    document.versions.map((version) => ({ ...version, documentTitle: document.title })),
-  )
-  // A adaptação parte sempre de um currículo importado (kind vem do backend), nunca de uma versão já adaptada.
-  const baseCandidates = versions.filter((version) =>
-    version.kind ? version.kind === 'base' : version.title.toLowerCase().includes('base importada'))
-  const selectable = baseCandidates.length > 0 ? baseCandidates : versions
-  const activeVersion = selectable.find((version) => version.id === selectedVersionId)
-    ?? [...selectable].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0]
-  const activeVersionId = activeVersion?.id ?? ''
+  // A adaptação parte sempre de um currículo importado; o backend informa o tipo de cada versão.
+  const selectable = selectableVersions(documents)
+  const activeVersion = activeBaseVersion(documents, selectedVersionId)
 
   const hasJobInput = Boolean(jobDescription.trim() || jobUrl.trim() || screenshotFile)
   const outputText = textOverride ?? draft?.plainText ?? ''
@@ -136,37 +129,10 @@ export function ResumeAtsTab(props: Props) {
   )
   const baseReady = criticalFields.size === 0
 
-  const requirementReview = useMemo(() => {
-    const included = new Set((draft?.includedKeywords ?? []).map(normalizeKeyword))
-    const adjacent = new Set((draft?.adjacentKeywords ?? []).map(normalizeKeyword))
-    const excluded = new Set((draft?.excludedKeywords ?? []).map(normalizeKeyword))
-
-    return (jobTarget?.requirements ?? []).map((requirement): RequirementReviewItem => {
-      const keys = [requirement.label, requirement.normalizedKeyword, ...requirement.exactPhrases]
-        .map(normalizeKeyword)
-        .filter(Boolean)
-      const status = keys.some((key) => included.has(key))
-        ? 'direct'
-        : keys.some((key) => adjacent.has(key))
-          ? 'adjacent'
-          : keys.some((key) => excluded.has(key))
-            ? 'missing'
-            : 'missing'
-      return { ...requirement, status }
-    })
-  }, [draft?.adjacentKeywords, draft?.excludedKeywords, draft?.includedKeywords, jobTarget?.requirements])
-
-  const missingSuggestions = useMemo(() => {
-    const profileSkills = new Set(profile.skills.map(normalizeKeyword))
-    return (draft?.excludedKeywords ?? [])
-      .filter((skill) => skill.trim() && !profileSkills.has(normalizeKeyword(skill)))
-      .filter((skill, index, all) =>
-        all.findIndex((candidate) => normalizeKeyword(candidate) === normalizeKeyword(skill)) === index,
-      )
-      .slice(0, 4)
-  }, [draft?.excludedKeywords, profile.skills])
-
-  const directItems = requirementReview.filter((item) => item.status === 'direct')
+  // Leitura da análise vem pronta do backend; aqui só se exibe.
+  const analysis = draft?.analysis ?? null
+  const requirementReview = analysis?.requirements ?? []
+  const missingSuggestions = analysis?.missingSuggestions ?? []
   // Sem fallback inventado: vazio e vazio.
   const previewRole = profile.targetRole || activeVersion?.targetRole || ''
 
@@ -211,7 +177,6 @@ export function ResumeAtsTab(props: Props) {
 
   return (
     <div>
-      <ResumeAtsHeader profile={profile} />
       <div className="cv-page">
         <div className="cv-main">
 
@@ -353,7 +318,7 @@ export function ResumeAtsTab(props: Props) {
                     {requirementReview.slice(0, 12).map((requirement) => (
                       <div key={requirement.id} className="cv-req">
                         <span className={`cv-req__dot cv-req__dot--${requirement.status}`}>
-                          {requirement.status === 'direct' ? <Check size={12} /> : requirement.status === 'adjacent' ? <ArrowRight size={12} /> : <AlertCircle size={12} />}
+                          {requirement.status === 'proven' ? <Check size={12} /> : requirement.status === 'adjacent' ? <ArrowRight size={12} /> : <AlertCircle size={12} />}
                         </span>
                         <div className="min-w-0 flex-1">
                           <p className="cv-req__label">{requirement.label} <span className="cv-req__tag">· {requirementStatusLabel(requirement.status)}</span></p>
@@ -362,7 +327,7 @@ export function ResumeAtsTab(props: Props) {
                       </div>
                     ))}
                   </div>
-                  {jobTarget.requirements.length > 12 && <p className="cv-hint">Mostrando os 12 requisitos mais relevantes.</p>}
+                  {requirementReview.length > 12 && <p className="cv-hint">Mostrando os 12 requisitos mais relevantes.</p>}
                   {jobTarget.warnings.length > 0 && (
                     <div className="cv-alert cv-alert--amber" style={{ marginTop: 12 }}>
                       <AlertCircle size={16} className="shrink-0" />
@@ -373,7 +338,7 @@ export function ResumeAtsTab(props: Props) {
               )}
 
               {missingSuggestions.length > 0 && (
-                <section className="cv-card" aria-label="Lacunas para você decidir">
+                <section className="cv-card" id="cv-lacunas" aria-label="Lacunas para você decidir">
                   <h2 className="cv-steptitle">Lacunas para você decidir</h2>
                   <p className="cv-stepsub">Só adicione uma habilidade se você puder sustentá-la. O produto não inventa experiência para preencher palavras-chave.</p>
                   <div className="cv-row" style={{ marginTop: 12 }}>
@@ -447,17 +412,15 @@ export function ResumeAtsTab(props: Props) {
           previewRole={previewRole}
           baseReady={Boolean(activeVersion && baseReady)}
           hasJobInput={hasJobInput}
-          directItems={directItems}
-          missingSuggestions={missingSuggestions}
+          analysis={analysis}
           onViewResume={() => scrollTo('cv-versao')}
+          onViewRequirements={() => scrollTo('cv-requisitos')}
+          onViewSuggestions={() => scrollTo('cv-lacunas')}
         />
       </div>
 
       <ResumeAtsInsights
-        activeVersionId={activeVersionId}
-        hasAnalysis={Boolean(draft && jobTarget)}
-        directCount={directItems.length}
-        requirementReview={requirementReview}
+        analysis={analysis}
         onViewAnalysis={() => scrollTo('cv-requisitos')}
       />
 
@@ -484,12 +447,8 @@ function formatDate(value: string) {
   return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/\./g, '')
 }
 
-function normalizeKeyword(value: string) {
-  return value.toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-z0-9+#.]+/g, ' ').trim()
-}
-
 function requirementStatusLabel(status: RequirementStatus) {
-  if (status === 'direct') return 'Comprovado'
+  if (status === 'proven') return 'Comprovado'
   if (status === 'adjacent') return 'Relacionado'
   return 'Revisar'
 }

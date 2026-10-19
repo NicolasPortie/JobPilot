@@ -9,19 +9,6 @@ import { useResumeWorkflow } from './useResumeWorkflow'
 import type { ReviewAnswers } from './resumeWorkflowModels'
 import { isUnauthorizedResponse, LOCAL_API_OFFLINE_MESSAGE, responseMessage } from './utils'
 
-const recommendedSkillsStorageKey = 'jobpilot_ats_profile_skill_additions'
-
-function loadRecommendedSkillAdditions(): AtsProfileSkillAddition[] {
-  try {
-    const raw = localStorage.getItem(recommendedSkillsStorageKey)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-
 export function useJobPilotApp() {
   // Keep the bearer token out of persistent storage. The backend uses the
   // Authorization header, so sessionStorage keeps the session across tabs
@@ -56,12 +43,13 @@ export function useJobPilotApp() {
   const [resumeLayouts, setResumeLayouts] = useState<ResumeLayoutOption[]>(fallbackResumeLayouts)
   const [selectedLayout, setSelectedLayout] = useState('ats_standard')
   const [reviewAnswers, setReviewAnswers] = useState<ReviewAnswers>({})
-  const [recommendedSkillAdditions, setRecommendedSkillAdditions] = useState<AtsProfileSkillAddition[]>(loadRecommendedSkillAdditions)
+  const [recommendedSkillAdditions, setRecommendedSkillAdditions] = useState<AtsProfileSkillAddition[]>([])
   const [validationIssues, setValidationIssues] = useState<ProfileValidationIssue[]>([])
   const [profileCompletion, setProfileCompletion] = useState(0)
   const [retention, setRetention] = useState<RetentionPolicy | null>(null)
   const [dangerNotice, setDangerNotice] = useState('')
   const [dangerBusy, setDangerBusy] = useState(false)
+  const [profileNotice, setProfileNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
 
   async function login() {
     if (loginBusy) return
@@ -87,6 +75,15 @@ export function useJobPilotApp() {
     setToken('')
   }
 
+  const loadRecommendations = useCallback(async () => {
+    try {
+      const { data } = await profileClient.skillRecommendations()
+      setRecommendedSkillAdditions(data)
+    } catch {
+      setRecommendedSkillAdditions([])
+    }
+  }, [])
+
   const refresh = useCallback(async () => {
     setGlobalNotice('')
     setRefreshBusy(true)
@@ -99,6 +96,7 @@ export function useJobPilotApp() {
         setValidationIssues,
         setProfileCompletion,
       })
+      void loadRecommendations()
     } catch (error: unknown) {
       if (isUnauthorizedResponse(error)) {
         const refreshToken = sessionStorage.getItem('jobpilot_refresh') ?? ''
@@ -124,7 +122,7 @@ export function useJobPilotApp() {
     } finally {
       setRefreshBusy(false)
     }
-  }, [])
+  }, [loadRecommendations])
 
   const loadRetention = useCallback(async () => {
     try {
@@ -140,10 +138,6 @@ export function useJobPilotApp() {
     if (token) queueMicrotask(() => void refresh())
     if (token) queueMicrotask(() => void loadRetention())
   }, [refresh, loadRetention, token])
-
-  useEffect(() => {
-    localStorage.setItem(recommendedSkillsStorageKey, JSON.stringify(recommendedSkillAdditions))
-  }, [recommendedSkillAdditions])
 
   const clearJobInputs = useCallback(() => {
     setAtsJobDescription('')
@@ -175,7 +169,6 @@ export function useJobPilotApp() {
     atsUseAi,
     selectedLayout,
     reviewAnswers,
-    setRecommendedSkillAdditions,
     setProfile,
     setProfileImportBusy,
     setProfileImportResult,
@@ -197,19 +190,26 @@ export function useJobPilotApp() {
   async function saveProfile() {
     if (actionBusy) return
     setActionBusy(true)
+    setProfileNotice(null)
     try {
-      await profileClient.save(profile)
-      setProfileImportNotice('Perfil salvo.')
+      const { data } = await profileClient.save(profile)
+      setProfile({ ...emptyProfile, ...data })
+      setProfileNotice({ tone: 'ok', text: 'Perfil salvo.' })
       await refresh()
     } catch (error: unknown) {
-      setProfileImportNotice(responseMessage(error, 'Não foi possível salvar o perfil. Verifique a API local.'))
+      setProfileNotice({ tone: 'error', text: responseMessage(error, 'Não foi possível salvar o perfil. Verifique a API local.') })
     } finally {
       setActionBusy(false)
     }
   }
 
-  function removeRecommendedSkillAddition(id: string) {
-    setRecommendedSkillAdditions((current) => current.filter((item) => item.id !== id))
+  async function removeRecommendedSkillAddition(id: string) {
+    try {
+      await profileClient.removeSkillRecommendation(id)
+      setRecommendedSkillAdditions((current) => current.filter((item) => item.id !== id))
+    } catch (error: unknown) {
+      setProfileNotice({ tone: 'error', text: responseMessage(error, 'Não foi possível remover a recomendação.') })
+    }
   }
 
   async function deleteProfile() {
@@ -271,6 +271,8 @@ export function useJobPilotApp() {
     profileImportBusy,
     profileImportResult,
     profileImportNotice,
+    profileNotice,
+    profileSaveBusy: actionBusy,
     selectedResumeFile,
     setSelectedResumeFile,
     resumeDocuments,

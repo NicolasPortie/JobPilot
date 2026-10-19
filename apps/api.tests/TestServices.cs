@@ -77,7 +77,7 @@ internal static class TestServices
         new(Repo<JobTarget>(db));
 
     public static CandidateProfileService CandidateProfileService(JobPilotDbContext db) =>
-        new(Repo<CandidateProfile>(db), Repo<ProfileValidationRule>(db), Uow(db), ProfileGuard(db));
+        new(Repo<CandidateProfile>(db), Repo<ProfileSkillRecommendation>(db), Repo<ProfileValidationRule>(db), Uow(db), ProfileGuard(db));
 
     public static ProfileGuard ProfileGuard(JobPilotDbContext db, ResumeTextService? resumeTextService = null) =>
         new(Repo<CandidateProfile>(db), Repo<ProfileValidationRule>(db), Uow(db), resumeTextService);

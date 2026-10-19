@@ -11,7 +11,7 @@ function response<T>(data: T) {
 }
 
 function version(id: string, title: string, updatedAt: string): ResumeVersionSummary {
-  return { id, title, updatedAt, status: 'ready', targetRole: '', targetCompany: '', atsScore: 0 }
+  return { id, title, updatedAt, status: 'ready', targetRole: '', targetCompany: '', atsScore: 0, kind: title.includes('Base importada') ? 'base' : 'other' }
 }
 
 function document(id: string, versions: ResumeVersionSummary[]): ResumeDocumentSummary {

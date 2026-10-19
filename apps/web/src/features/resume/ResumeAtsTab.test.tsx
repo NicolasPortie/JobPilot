@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import type { ComponentProps } from 'react'
 import { AxiosHeaders } from 'axios'
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resumeClient } from '../../api/resumeClient'
 import { aiClient } from '../../api/aiClient'
-import type { JobTargetDetail, ResumeSection, TailoredResume } from '../../types'
+import type { JobTargetDetail, ResumeAnalysis, ResumeSection, TailoredResume } from '../../types'
 import { ResumeAtsTab } from './ResumeAtsTab'
 
 vi.mock('../../api/aiClient', () => ({ aiClient: { status: vi.fn().mockResolvedValue({ data: { configured: false, available: false } }) } }))
@@ -15,7 +15,7 @@ vi.mock('../../api/resumeClient', () => ({ resumeClient: { listSections: vi.fn()
 type Props = ComponentProps<typeof ResumeAtsTab>
 const version = {
   id: 'base', title: 'Base', status: 'ready', targetRole: 'Analista', targetCompany: '',
-  atsScore: 0, updatedAt: '2026-10-01T12:00:00Z',
+  atsScore: 0, updatedAt: '2026-10-01T12:00:00Z', kind: 'base' as const,
 }
 
 function section(sectionType: string, content: object): ResumeSection {
@@ -47,12 +47,28 @@ function makeProps(overrides: Partial<Props> = {}): Props {
   }
 }
 
+const analysis: ResumeAnalysis = {
+  adherence: { level: 'good', badgeLabel: 'Boa aderência', headline: 'Boa base!', message: 'Seu perfil atende parte dos requisitos; revise as lacunas. 1 de 3 requisitos comprovados no seu currículo.' },
+  requirements: [
+    { id: 'SQL', label: 'SQL', category: 'skill', importance: 'required', status: 'proven', evidenceText: 'SQL na vaga' },
+    { id: 'Docker', label: 'Docker', category: 'skill', importance: 'required', status: 'adjacent', evidenceText: 'Docker na vaga' },
+    { id: 'Python', label: 'Python', category: 'skill', importance: 'required', status: 'missing', evidenceText: 'Python na vaga' },
+  ],
+  provenLabels: ['SQL'],
+  missingSuggestions: ['Python'],
+  insights: [
+    { key: 'results', title: 'Resultados concretos', text: 'Um terço dos requisitos está comprovado.' },
+    { key: 'keywords', title: 'Palavras-chave importantes', text: 'Use os termos mais relevantes da vaga no seu currículo, como Python e Docker, desde que você possa sustentá-los.' },
+    { key: 'projects', title: 'Projetos relevantes', text: 'Destaque projetos como Projeto real para demonstrar experiência prática.' },
+  ],
+}
+
 function makeDraft(overrides: Partial<TailoredResume> = {}): TailoredResume {
   return {
     tailoredVersionId: 'tailored', baseResumeVersionId: 'base', jobTargetId: 'job', evidenceMapRunId: 'map',
     status: 'draft', atsScore: 76.4, scoreComponents: [], sectionDiffs: [], reviewQuestions: [],
     plainText: 'Texto gerado', includedKeywords: ['SQL'], adjacentKeywords: ['Docker'],
-    excludedKeywords: ['Python', 'python', 'SQL'], checkpoints: [], warnings: [], usedAi: false,
+    excludedKeywords: ['Python', 'python', 'SQL'], checkpoints: [], warnings: [], usedAi: false, analysis,
     version: { ...version, id: 'tailored', resumeDocumentId: 'document', plainText: 'Texto gerado', sections: [
       section('summary', { summary: 'Resumo adaptado' }),
       section('experience', { items: [{ role: 'Engenheira', company: 'Empresa', period: '2024–2026' }] }),
@@ -136,8 +152,7 @@ describe('ResumeAtsTab workflow', () => {
     expect(props.setTab).toHaveBeenCalledWith('profile')
   })
 
-  it('renders tailored sections, requirement verdicts and real base projects', async () => {
-    vi.mocked(resumeClient.listSections).mockResolvedValue(sectionsResponse([section('projects', { items: [{ name: 'Projeto real' }] })]))
+  it('renders tailored sections and the analysis the backend computed', () => {
     const props = makeProps({ draft: makeDraft(), jobTarget: makeJob() })
     render(<ResumeAtsTab {...props} />)
     const rail = screen.getByRole('complementary', { name: 'Prévia e aderência' })
@@ -147,10 +162,12 @@ describe('ResumeAtsTab workflow', () => {
     expect(within(rail).getByText('TypeScript')).toBeTruthy()
     expect(within(rail).getByText('Computação')).toBeTruthy()
     expect(within(rail).getByRole('img', { name: 'Aderência de 76%' })).toBeTruthy()
+    expect(within(rail).getByText('Boa aderência')).toBeTruthy()
+    expect(within(rail).getByText('Boa base!')).toBeTruthy()
     const requirements = screen.getByRole('region', { name: 'Requisitos em contexto' })
     for (const label of ['· Comprovado', '· Relacionado', '· Revisar']) expect(within(requirements).getByText(label)).toBeTruthy()
     expect(screen.getByText(/1 de 3 requisitos comprovados/)).toBeTruthy()
-    expect(await screen.findByText(/Destaque projetos como Projeto real/)).toBeTruthy()
+    expect(screen.getByText(/Destaque projetos como Projeto real/)).toBeTruthy()
     expect(screen.getByText(/como Python e Docker/)).toBeTruthy()
     const gaps = screen.getByRole('region', { name: 'Lacunas para você decidir' })
     expect(within(gaps).getAllByRole('button')).toHaveLength(1)
@@ -182,18 +199,4 @@ describe('ResumeAtsTab workflow', () => {
     expect(props.onExport).toHaveBeenNthCalledWith(2, 'pdf')
   })
 
-  it('ignores late base section responses after selecting another version', async () => {
-    let finishFirst!: (response: ReturnType<typeof sectionsResponse>) => void
-    vi.mocked(resumeClient.listSections)
-      .mockImplementationOnce(() => new Promise((resolve) => { finishFirst = resolve }))
-      .mockResolvedValueOnce(sectionsResponse([section('projects', { items: [{ name: 'Projeto atual' }] })]))
-    const props = makeProps()
-    props.documents[0].versions.push({ ...version, id: 'second' })
-    const view = render(<ResumeAtsTab {...props} />)
-    view.rerender(<ResumeAtsTab {...props} selectedVersionId="second" />)
-    expect(await screen.findByText(/Destaque projetos como Projeto atual/)).toBeTruthy()
-    await act(async () => finishFirst(sectionsResponse([section('projects', { items: [{ name: 'Projeto antigo' }] })])))
-    await waitFor(() => expect(screen.queryByText(/Destaque projetos como Projeto antigo/)).toBeNull())
-    expect(screen.getByText(/Destaque projetos como Projeto atual/)).toBeTruthy()
-  })
 })

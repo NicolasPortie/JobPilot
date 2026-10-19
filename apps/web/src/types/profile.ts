@@ -22,6 +22,7 @@ export type ProfileValidationIssue = {
   isCritical: boolean
 }
 
+/** Habilidade levada ao perfil a partir de uma análise de vaga (histórico guardado no servidor). */
 export type AtsProfileSkillAddition = {
   id: string
   skill: string

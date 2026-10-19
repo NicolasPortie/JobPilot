@@ -25,7 +25,7 @@ export type ResumeVersionSummary = {
   atsScore: number
   updatedAt: string
   /** Calculado no backend: base importada, adaptada a uma vaga, ATS geral ou outra. */
-  kind?: 'base' | 'tailored' | 'ats' | 'other'
+  kind: 'base' | 'tailored' | 'ats' | 'other'
 }
 
 export type ResumeSection = {
@@ -90,6 +90,27 @@ export type TailoredResume = {
   version: ResumeVersionDetail
   usedAi?: boolean
   aiNotice?: string | null
+  /** Leitura pronta do backend: aderência, requisitos, lacunas e insights. A tela só exibe. */
+  analysis?: ResumeAnalysis | null
+}
+
+export type RequirementStatus = 'proven' | 'adjacent' | 'missing'
+
+export type RequirementReviewItem = {
+  id: string
+  label: string
+  category: string
+  importance: string
+  status: RequirementStatus
+  evidenceText: string
+}
+
+export type ResumeAnalysis = {
+  adherence: { level: 'high' | 'good' | 'low'; badgeLabel: string; headline: string; message: string }
+  requirements: RequirementReviewItem[]
+  provenLabels: string[]
+  missingSuggestions: string[]
+  insights: { key: string; title: string; text: string }[]
 }
 
 export type ResumeScoreComponent = {

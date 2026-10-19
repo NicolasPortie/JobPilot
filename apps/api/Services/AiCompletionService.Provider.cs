@@ -8,15 +8,13 @@ namespace JobPilot.Api.Services;
 public sealed partial class AiCompletionService
 {
     /// <summary>
-    /// Escolhe o provedor de IA: configuração local, provedor salvo legível e, por último,
-    /// o Ollama local. Chave salva com um segredo antigo é ignorada com aviso em vez
-    /// de derrubar toda chamada de IA.
+    /// Escolhe o provedor de IA: o salvo na tela (ativo e com chave legível), depois a configuração
+    /// local (<c>Ai:*</c>/<c>Kimi:*</c>) e, por último, o Ollama local. Chave salva com um segredo
+    /// antigo é ignorada com aviso em vez de derrubar toda chamada de IA.
     /// </summary>
     public async Task<AiProvider> ResolveProviderAsync(Guid userId)
     {
-        var configured = ConfiguredProvider();
-        if (configured is not null) return configured;
-
+        var localEnabled = configuration.GetValue("LocalLlm:Enabled", true);
         var saved = await db.AiProviders
             .Where(x => x.UserId == userId && x.IsActive)
             .OrderByDescending(x => x.IsDefault)
@@ -30,7 +28,10 @@ public sealed partial class AiCompletionService
             logger.LogWarning("AI provider {ProviderName} ignored: saved API key cannot be read with the current Security:SecretKey.", provider.Name);
         }
 
-        var localEnabled = configuration.GetValue("LocalLlm:Enabled", true);
+        var configured = ConfiguredProvider();
+        if (configured is not null) return configured;
+
+        // O seed cria uma linha "Ollama Local" para todo usuário; ela não deve esconder a configuração do servidor.
         var savedOllama = saved.FirstOrDefault(IsOllama);
         if (localEnabled && savedOllama is not null) return savedOllama;
         if (localEnabled) return LocalOllamaProvider();
@@ -84,7 +85,7 @@ public sealed partial class AiCompletionService
             };
             return new AiProvider
             {
-                Name = name,
+                Name = FirstNonEmpty(configuration["Ai:Name"]) ?? name,
                 ProviderType = type,
                 BaseUrl = FirstNonEmpty(configuration["Ai:BaseUrl"]) ?? baseUrl,
                 Model = FirstNonEmpty(configuration["Ai:Model"]) ?? model,

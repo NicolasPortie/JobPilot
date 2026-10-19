@@ -20,10 +20,10 @@ describe('ApplicationsTab', () => {
   it('lists prepared applications with the actions to send each one', async () => {
     vi.spyOn(applicationsClient, 'history').mockResolvedValue(ok(history))
     const onDownload = vi.fn()
-    render(<ApplicationsTab exportBusy={false} onDownload={onDownload} onMarkApplied={vi.fn()} />)
+    render(<ApplicationsTab exportBusy={false} onDownload={onDownload} onMarkApplied={vi.fn()} onGoToResume={vi.fn()} />)
 
     expect(await screen.findByText(/Dev \.NET · Alfa/)).toBeTruthy()
-    expect(screen.getByText('2 currículos adaptados · 1 enviados')).toBeTruthy()
+    expect(screen.getByText('2 currículos adaptados · 1 enviado')).toBeTruthy()
     expect(screen.getAllByRole('link', { name: /Abrir vaga/ })).toHaveLength(1)
     fireEvent.click(screen.getAllByRole('button', { name: /PDF/ })[0])
     expect(onDownload).toHaveBeenCalledWith('v1', 'pdf')
@@ -32,7 +32,7 @@ describe('ApplicationsTab', () => {
   it('filters by sent state and toggles the manual status', async () => {
     vi.spyOn(applicationsClient, 'history').mockResolvedValue(ok(history))
     const onMarkApplied = vi.fn().mockResolvedValue(undefined)
-    render(<ApplicationsTab exportBusy={false} onDownload={vi.fn()} onMarkApplied={onMarkApplied} />)
+    render(<ApplicationsTab exportBusy={false} onDownload={vi.fn()} onMarkApplied={onMarkApplied} onGoToResume={vi.fn()} />)
     await screen.findByText(/Dev \.NET · Alfa/)
 
     fireEvent.click(screen.getByRole('button', { name: 'A enviar' }))
@@ -50,7 +50,7 @@ describe('ApplicationsTab', () => {
   it('does not show a sent status the server failed to save', async () => {
     vi.spyOn(applicationsClient, 'history').mockResolvedValue(ok(history))
     const onMarkApplied = vi.fn().mockResolvedValue(false)
-    render(<ApplicationsTab exportBusy={false} onDownload={vi.fn()} onMarkApplied={onMarkApplied} />)
+    render(<ApplicationsTab exportBusy={false} onDownload={vi.fn()} onMarkApplied={onMarkApplied} onGoToResume={vi.fn()} />)
     await screen.findByText(/Dev \.NET · Alfa/)
 
     fireEvent.click(screen.getAllByRole('button', { name: /Marcar enviada/ })[0])
@@ -61,7 +61,7 @@ describe('ApplicationsTab', () => {
 
   it('never links a job URL that is not http(s)', async () => {
     vi.spyOn(applicationsClient, 'history').mockResolvedValue(ok([{ ...history[0], sourceUrl: 'javascript:alert(1)' }]))
-    render(<ApplicationsTab exportBusy={false} onDownload={vi.fn()} onMarkApplied={vi.fn()} />)
+    render(<ApplicationsTab exportBusy={false} onDownload={vi.fn()} onMarkApplied={vi.fn()} onGoToResume={vi.fn()} />)
     await screen.findByText(/Dev \.NET · Alfa/)
 
     expect(screen.queryByRole('link', { name: /Abrir vaga/ })).toBeNull()
@@ -69,12 +69,12 @@ describe('ApplicationsTab', () => {
 
   it('explains an empty history and surfaces load errors', async () => {
     vi.spyOn(applicationsClient, 'history').mockResolvedValue(ok([]))
-    const view = render(<ApplicationsTab exportBusy={false} onDownload={vi.fn()} onMarkApplied={vi.fn()} />)
-    expect(await screen.findByText(/Gere um currículo na aba Currículo/)).toBeTruthy()
+    const view = render(<ApplicationsTab exportBusy={false} onDownload={vi.fn()} onMarkApplied={vi.fn()} onGoToResume={vi.fn()} />)
+    expect(await screen.findByText(/Gere um currículo adaptado a uma vaga/)).toBeTruthy()
     view.unmount()
 
     vi.spyOn(applicationsClient, 'history').mockRejectedValue({ response: { data: { message: 'Falhou' } } })
-    render(<ApplicationsTab exportBusy={false} onDownload={vi.fn()} onMarkApplied={vi.fn()} />)
+    render(<ApplicationsTab exportBusy={false} onDownload={vi.fn()} onMarkApplied={vi.fn()} onGoToResume={vi.fn()} />)
     expect((await screen.findByRole('alert')).textContent).toBe('Falhou')
   })
 })

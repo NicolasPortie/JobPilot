@@ -1,4 +1,5 @@
 using JobPilot.Api.Application;
+using JobPilot.Api.Application.Contracts;
 using JobPilot.Api.Data;
 using JobPilot.Api.Services;
 using Microsoft.EntityFrameworkCore;
@@ -31,6 +32,53 @@ public sealed class CandidateProfileServiceTests
 
         Assert.Null(response.Id);
         Assert.Equal("", response.FullName);
+    }
+
+    [Fact]
+    public async Task SaveAsync_NormalizesStateAndSkills()
+    {
+        await using var db = CreateDb();
+        var service = TestServices.CandidateProfileService(db);
+
+        var response = await service.SaveAsync(Guid.NewGuid(), Request("Ana") with { State = " s1p ", Skills = [" React ", "react", "", "Vue"] });
+
+        Assert.Equal("SP", response.State);
+        Assert.Equal(["React", "Vue"], response.Skills);
+    }
+
+    [Fact]
+    public async Task AddSkillAsync_AddsOnce_SortsAndRecordsRecommendation()
+    {
+        await using var db = CreateDb();
+        var service = TestServices.CandidateProfileService(db);
+        var userId = Guid.NewGuid();
+        await service.SaveAsync(userId, Request("Ana"));
+
+        var first = await service.AddSkillAsync(userId, new AddProfileSkillRequest("  Docker ", "missing", null, "Dev", "ACME"));
+        var again = await service.AddSkillAsync(userId, new AddProfileSkillRequest("docker", "missing", null, "Dev", "ACME"));
+
+        Assert.False(first.AlreadyPresent);
+        Assert.True(again.AlreadyPresent);
+        Assert.Equal([".NET", "C#", "Docker"], first.Profile.Skills);
+        var history = await service.ListSkillRecommendationsAsync(userId);
+        var item = Assert.Single(history);
+        Assert.Equal("Docker", item.Skill);
+        Assert.Equal("ACME", item.Company);
+    }
+
+    [Fact]
+    public async Task SkillRecommendations_AreIsolatedPerUser_AndRemovable()
+    {
+        await using var db = CreateDb();
+        var service = TestServices.CandidateProfileService(db);
+        var owner = Guid.NewGuid();
+        await service.AddSkillAsync(owner, new AddProfileSkillRequest("Kubernetes", "related", "Veio da vaga", null, null));
+        var id = Assert.Single(await service.ListSkillRecommendationsAsync(owner)).Id;
+
+        Assert.Empty(await service.ListSkillRecommendationsAsync(Guid.NewGuid()));
+        Assert.False(await service.RemoveSkillRecommendationAsync(Guid.NewGuid(), id));
+        Assert.True(await service.RemoveSkillRecommendationAsync(owner, id));
+        Assert.Empty(await service.ListSkillRecommendationsAsync(owner));
     }
 
     private static CandidateProfileRequest Request(string name) =>

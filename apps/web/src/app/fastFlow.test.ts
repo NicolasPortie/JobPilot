@@ -34,7 +34,7 @@ function makeState(overrides: Partial<ResumeWorkflowState> = {}) {
       ] }],
     atsJobDescription: '', atsJobUrl: 'https://vagas.example/1\nhttps://vagas.example/2', atsScreenshotFile: null,
     atsTailoredResume: null, atsJobTarget: null, atsUseAi: false, selectedLayout: 'ats_standard', reviewAnswers: {},
-    setRecommendedSkillAdditions: vi.fn(), setProfile: vi.fn(), setProfileImportBusy: vi.fn(), setProfileImportResult: vi.fn(),
+    setProfile: vi.fn(), setProfileImportBusy: vi.fn(), setProfileImportResult: vi.fn(),
     setProfileImportNotice: vi.fn(), setSelectedResumeFile: vi.fn(), setAtsResumeBusy: vi.fn(), setAtsJobTarget: record('target'),
     setAtsTailoredResume: record('tailored'), setAtsScreenshotFile: vi.fn(), setAtsExportBusy: vi.fn(),
     setAtsResumeNotice: record('notice'), setReviewAnswers: vi.fn(), refresh: vi.fn().mockResolvedValue(undefined),

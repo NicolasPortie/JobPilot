@@ -1,0 +1,81 @@
+/* Tela de acesso: mesma lateral do app (marca, onda e frase) e o formulário direto no fundo */
+.cv-login {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  min-height: 100dvh;
+  font-family: var(--cv-sans);
+  color: var(--cv-ink);
+}
+
+.cv-login__side {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 28px 24px 0 34px;
+  background: #f7efe0;
+  border-right: 1px solid #ead9be;
+  overflow: hidden;
+}
+
+.cv-login__side .cv-s-art {
+  margin: 0 -24px 0 -34px;
+  padding-left: 34px;
+}
+
+.cv-login__box {
+  align-self: center;
+  width: 100%;
+  max-width: 360px;
+  margin-left: clamp(32px, 8vw, 120px);
+  padding: 32px 0;
+}
+
+.cv-login__title {
+  font-family: var(--cv-serif);
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.cv-login__field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.cv-login__input--toggle {
+  padding-right: 48px;
+}
+
+.cv-login__toggle {
+  position: absolute;
+  right: 6px;
+}
+
+.cv-login code {
+  border-radius: 6px;
+  background: rgb(255 255 255 / 0.6);
+  padding: 1px 6px;
+  font-size: 12px;
+}
+
+@media (max-width: 767px) {
+  .cv-login {
+    grid-template-columns: 1fr;
+  }
+
+  .cv-login__side {
+    padding-bottom: 24px;
+  }
+
+  .cv-login__side .cv-s-art {
+    display: none;
+  }
+
+  .cv-login__box {
+    margin: 0;
+    padding: 24px;
+    max-width: none;
+  }
+}

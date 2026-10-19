@@ -152,6 +152,35 @@ public sealed class AiResilienceTests
     }
 
     [Fact]
+    public async Task OpenAiCompatibleGateway_UsesConfiguredHostModelAndDisablesStreaming()
+    {
+        await using var db = CreateDb();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Security:SecretKey"] = "new-secret-new-secret-new-secret-0002",
+            ["KIMI_API_KEY"] = "",
+            ["Ai:Provider"] = "openai",
+            ["Ai:Name"] = "OmniRoute",
+            ["Ai:ApiKey"] = "gateway-test-key",
+            ["Ai:BaseUrl"] = "https://gateway.example.com/v1",
+            ["Ai:Model"] = "antigravity/gemini-3.8-flash-combo",
+            ["Ai:AllowedHosts"] = "gateway.example.com"
+        }).Build();
+        var handler = new StaticHandler(HttpStatusCode.OK, "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"ok\"}}]}");
+        var service = new AiCompletionService(new HttpClient(handler), configuration, db, NullLogger<AiCompletionService>.Instance, new TraceRedactionService(), new AiHealthTracker());
+        var userId = Guid.NewGuid();
+
+        var text = await service.CompleteTextAsync(userId, "test", "system", "prompt");
+        var status = await service.GetStatusAsync(userId);
+
+        Assert.Equal("ok", text);
+        Assert.Contains("\"stream\":false", handler.LastBody);
+        Assert.Contains("antigravity/gemini-3.8-flash-combo", handler.LastBody);
+        Assert.Equal("OmniRoute", status.Provider);
+        Assert.True(status.Available);
+    }
+
+    [Fact]
     public async Task ProviderRejection_IsReportedInStatus()
     {
         await using var db = CreateDb();
@@ -206,7 +235,7 @@ public sealed class AiResilienceTests
             ProviderType = "anthropic",
             BaseUrl = "https://api.anthropic.com",
             Model = "saved-model",
-            IsActive = true,
+            IsActive = false,
             IsDefault = true,
             EncryptedApiKey = SecretProtector.Protect("saved-test-key", config)
         });
@@ -220,7 +249,7 @@ public sealed class AiResilienceTests
     [Theory]
     [InlineData("Kimi:ApiKey")]
     [InlineData("KIMI_API_KEY")]
-    public async Task LegacyKimiKey_StillWinsOverSavedProvider_WhenGenericKeyIsAbsent(string keySetting)
+    public async Task SavedProvider_TakesPrecedenceOverLocalConfiguration(string keySetting)
     {
         await using var db = CreateDb();
         var userId = Guid.NewGuid();
@@ -245,8 +274,42 @@ public sealed class AiResilienceTests
         await db.SaveChangesAsync();
         var service = new AiCompletionService(new HttpClient(), config, db, NullLogger<AiCompletionService>.Instance, new TraceRedactionService());
         var resolved = await service.ResolveProviderAsync(userId);
-        Assert.Equal("kimi", resolved.ProviderType);
-        Assert.Equal("local-test-key", SecretProtector.Unprotect(resolved.EncryptedApiKey, config));
+        Assert.Equal("anthropic", resolved.ProviderType);
+        Assert.Equal("saved-test-key", SecretProtector.Unprotect(resolved.EncryptedApiKey, config));
+    }
+
+    [Fact]
+    public async Task SeededOllamaRow_DoesNotHideTheServerConfiguration()
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Security:SecretKey"] = "test-secret-key-with-more-than-thirty-two-characters",
+            ["KIMI_API_KEY"] = "",
+            ["Ai:Provider"] = "anthropic",
+            ["Ai:ApiKey"] = "generic-test-key"
+        }).Build();
+        db.AiProviders.Add(new AiProvider
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Name = "Ollama Local",
+            ProviderType = "ollama",
+            BaseUrl = "http://localhost:11434",
+            Model = "qwen3:4b-instruct",
+            ApiFormat = "ollama-chat",
+            EncryptedApiKey = "",
+            IsActive = true,
+            IsDefault = true
+        });
+        await db.SaveChangesAsync();
+        var service = new AiCompletionService(new HttpClient(), config, db, NullLogger<AiCompletionService>.Instance, new TraceRedactionService());
+
+        Assert.Equal("anthropic", (await service.ResolveProviderAsync(userId)).ProviderType);
+
+        config["Ai:ApiKey"] = "";
+        Assert.Equal("ollama", (await service.ResolveProviderAsync(userId)).ProviderType);
     }
 
     [Theory]

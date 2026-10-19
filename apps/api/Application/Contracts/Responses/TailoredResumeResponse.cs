@@ -18,4 +18,5 @@ public record TailoredResumeResponse(
     string[] Warnings,
     ResumeVersionDetail Version,
     bool UsedAi = false,
-    string? AiNotice = null);
+    string? AiNotice = null,
+    ResumeAnalysisSummary? Analysis = null);

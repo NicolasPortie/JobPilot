@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
 import type { CSSProperties } from 'react'
 import { Check, ChevronRight, Clock, FileText, TrendingUp } from 'lucide-react'
-import type { JobRequirementDto, Profile, ResumeSection, TailoredResume } from '../../types'
-import { initials, sectionItems } from './resumeAtsPresentation'
+import type { Profile, ResumeAnalysis, ResumeSection, TailoredResume } from '../../types'
+import { initials } from '../../app/utils'
+import { sectionItems } from './resumeAtsPresentation'
 
 type Props = {
   profile: Pick<Profile, 'fullName' | 'professionalSummary' | 'skills'>
@@ -10,19 +11,18 @@ type Props = {
   previewRole: string
   baseReady: boolean
   hasJobInput: boolean
-  directItems: Pick<JobRequirementDto, 'id' | 'label'>[]
-  missingSuggestions: string[]
+  analysis: ResumeAnalysis | null
   onViewResume: () => void
+  onViewRequirements: () => void
+  onViewSuggestions: () => void
 }
 
-export function ResumeAtsPreview({ profile, draft, previewRole, baseReady, hasJobInput, directItems, missingSuggestions, onViewResume }: Props) {
+export function ResumeAtsPreview({ profile, draft, previewRole, baseReady, hasJobInput, analysis, onViewResume, onViewRequirements, onViewSuggestions }: Props) {
   const score = Math.round(Number(draft?.atsScore ?? 0))
-  const scoreTone = score >= 75 ? 'good' : score >= 55 ? 'warn' : 'soft'
-  const previewBadge = scoreTone === 'good'
-    ? { label: 'Alta aderência', tone: 'cv-badge--green' }
-    : scoreTone === 'warn'
-      ? { label: 'Boa aderência', tone: 'cv-badge--peach' }
-      : { label: 'Baixa aderência', tone: 'cv-badge--amber' }
+  const adherence = analysis?.adherence ?? null
+  const badgeTone = adherence?.level === 'high' ? 'cv-badge--green' : adherence?.level === 'good' ? 'cv-badge--peach' : 'cv-badge--amber'
+  const provenLabels = analysis?.provenLabels ?? []
+  const missingSuggestions = analysis?.missingSuggestions ?? []
 
   // Previa monta SOMENTE das secoes reais da versao adaptada (draft).
   // Sem draft, sem previa — nada de curriculo antes de gerar.
@@ -68,7 +68,7 @@ export function ResumeAtsPreview({ profile, draft, previewRole, baseReady, hasJo
                 <p className="cv-prev__name truncate">{profile.fullName}</p>
                 {previewRole && <p className="cv-prev__role truncate">{previewRole}</p>}
               </div>
-              <span className={`cv-badge cv-prev__badge ${previewBadge.tone}`}>{previewBadge.label}</span>
+              {adherence && <span className={`cv-badge cv-prev__badge ${badgeTone}`}>{adherence.badgeLabel}</span>}
             </div>
 
             {previewData.summary && (
@@ -137,12 +137,12 @@ export function ResumeAtsPreview({ profile, draft, previewRole, baseReady, hasJo
               <span className="cv-donut__inner">{draft ? `${score}%` : '–'}</span>
             </div>
             <div className="cv-callout">
-              <strong>{draft ? score >= 75 ? 'Ótima aderência!' : score >= 55 ? 'Boa base!' : 'Atenção aos requisitos' : 'Gere sua versão'}</strong>
-              {draft ? 'Seu perfil atende a maioria dos requisitos da vaga.' : 'Cole a vaga e gere uma versão para ver sua aderência estimada.'}
+              <strong>{adherence ? adherence.headline : 'Gere sua versão'}</strong>
+              {adherence ? adherence.message : 'Cole a vaga e gere uma versão para ver sua aderência estimada.'}
             </div>
           </div>
           <div className="cv-checklist" aria-label="Progresso da candidatura">
-            <ChecklistRow done={Boolean(baseReady)} label={baseReady ? 'Currículo base pronta' : 'Currículo base pendente'} />
+            <ChecklistRow done={Boolean(baseReady)} label={baseReady ? 'Currículo base pronto' : 'Currículo base pendente'} />
             <ChecklistRow done={hasJobInput} label={hasJobInput ? 'Dados da vaga informados' : 'Cole a descrição da vaga'} />
             <ChecklistRow done={Boolean(draft)} label={draft ? 'Versão adaptada gerada' : 'Versão adaptada aguardando'} />
           </div>
@@ -157,12 +157,16 @@ export function ResumeAtsPreview({ profile, draft, previewRole, baseReady, hasJo
           <div className="cv-mini__head">
             <span className="cv-mini__icon cv-mini__icon--green"><Check size={17} /></span>
             <h3 className="cv-mini__title">Pontos comprovados</h3>
-            <ChevronRight size={17} className="cv-mini__chev" />
+            {analysis && analysis.requirements.length > 0 && (
+              <button className="cv-mini__chev" onClick={onViewRequirements} aria-label="Ver requisitos em contexto" title="Ver requisitos em contexto">
+                <ChevronRight size={17} />
+              </button>
+            )}
           </div>
           <p className="cv-mini__sub">Experiências e habilidades que atendem aos requisitos da vaga.</p>
-          {directItems.length > 0 ? (
+          {provenLabels.length > 0 ? (
             <div className="cv-chips">
-              {directItems.slice(0, 6).map((item) => <span key={item.id} className="cv-chip">{item.label}</span>)}
+              {provenLabels.slice(0, 6).map((label) => <span key={label} className="cv-chip">{label}</span>)}
             </div>
           ) : (
             <p className="cv-hint">Aparecem aqui após a análise da vaga.</p>
@@ -173,9 +177,13 @@ export function ResumeAtsPreview({ profile, draft, previewRole, baseReady, hasJo
           <div className="cv-mini__head">
             <span className="cv-mini__icon"><FileText size={17} /></span>
             <h3 className="cv-mini__title">Sugestões de melhoria</h3>
-            <ChevronRight size={17} className="cv-mini__chev" />
+            {missingSuggestions.length > 0 && (
+              <button className="cv-mini__chev" onClick={onViewSuggestions} aria-label="Ver lacunas para decidir" title="Ver lacunas para decidir">
+                <ChevronRight size={17} />
+              </button>
+            )}
           </div>
-          <p className="cv-mini__sub">Inclua estes pontos para aumentar suas chances.</p>
+          <p className="cv-mini__sub">Pontos da vaga sem evidência no seu perfil. Adicione só o que você realmente domina.</p>
           {missingSuggestions.length > 0 ? (
             <div className="cv-chips">
               {missingSuggestions.map((skill) => <span key={skill} className="cv-chip">{skill}</span>)}

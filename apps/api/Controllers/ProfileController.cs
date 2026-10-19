@@ -1,4 +1,5 @@
 using JobPilot.Api.Application;
+using JobPilot.Api.Application.Contracts;
 using JobPilot.Api.Domain;
 using JobPilot.Api.Infrastructure;
 using JobPilot.Api.Services;
@@ -25,6 +26,19 @@ public sealed class ProfileController(
     [HttpPut]
     public async Task<ActionResult<CandidateProfileResponse>> Save(CandidateProfileRequest request) =>
         Ok(await profiles.SaveAsync(User.UserId(), request));
+
+    /// <summary>Leva uma habilidade sugerida pela análise para o perfil e registra a recomendação.</summary>
+    [HttpPost("skills")]
+    public async Task<ActionResult<AddProfileSkillResponse>> AddSkill(AddProfileSkillRequest request) =>
+        Ok(await profiles.AddSkillAsync(User.UserId(), request));
+
+    [HttpGet("skill-recommendations")]
+    public async Task<ActionResult<List<ProfileSkillRecommendationResponse>>> SkillRecommendations() =>
+        Ok(await profiles.ListSkillRecommendationsAsync(User.UserId()));
+
+    [HttpDelete("skill-recommendations/{id:guid}")]
+    public async Task<IActionResult> RemoveSkillRecommendation(Guid id) =>
+        await profiles.RemoveSkillRecommendationAsync(User.UserId(), id) ? NoContent() : NotFound();
 
     [HttpGet("validate")]
     public async Task<ActionResult<ProfileValidationResult>> Validate() =>

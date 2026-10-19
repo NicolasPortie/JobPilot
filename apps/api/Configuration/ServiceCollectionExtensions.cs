@@ -150,6 +150,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<AgentAnswerResolutionService>();
         services.AddScoped<IAgentProtocolService, AgentProtocolService>();
         services.AddScoped<AiProviderService>();
+        services.AddScoped<AiSettingsService>();
         services.AddScoped<ApplicationRunService>();
         services.AddScoped<AutoApplyPolicyService>();
         services.AddScoped<AgentLearningService>();

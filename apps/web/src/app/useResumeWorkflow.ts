@@ -2,6 +2,7 @@ import { applicationsClient } from '../api/applicationsClient'
 import { jobTargetClient } from '../api/jobTargetClient'
 import { profileClient } from '../api/profileClient'
 import { resumeClient } from '../api/resumeClient'
+import { activeBaseVersion } from './baseVersions'
 import { emptyProfile } from './defaults'
 import { downloadResumeVersion, type DownloadFormat } from './downloads'
 import type { ResumeWorkflowState } from './resumeWorkflowModels'
@@ -12,13 +13,7 @@ export function useResumeWorkflow(state: ResumeWorkflowState) {
   const review = useResumeReview(state)
 
   function activeBaseVersionId() {
-    const versions = state.resumeDocuments.flatMap((document) => document.versions)
-    const selected = versions.find((version) => version.id === state.selectedResumeVersionId)
-    if (selected) return selected.id
-    const baseVersions = versions.filter((version) =>
-      version.kind ? version.kind === 'base' : version.title.toLowerCase().includes('base importada'))
-    return (baseVersions.length > 0 ? baseVersions : versions)
-      .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0]?.id ?? ''
+    return activeBaseVersion(state.resumeDocuments, state.selectedResumeVersionId)?.id ?? ''
   }
 
   async function importResumeFile() {

@@ -9,13 +9,11 @@ type FieldLabelProps = {
 
 export function FieldLabel({ children, icon: Icon, auxiliary, required }: FieldLabelProps) {
   return (
-    <span className="mb-1.5 flex items-center gap-1.5 text-sm font-bold text-slate-700">
-      {Icon && <Icon size={14} className="text-slate-400" />}
+    <span className="cv-label cv-label--row">
+      {Icon && <Icon size={14} className="text-[var(--cv-faint)]" />}
       <span>{children}</span>
-      {required && <span className="text-red-500">*</span>}
-      {auxiliary && (
-        <span className="ml-auto text-xs font-normal text-slate-400">{auxiliary}</span>
-      )}
+      {required && <span className="cv-label__req">*</span>}
+      {auxiliary && <span className="cv-label__aux">{auxiliary}</span>}
     </span>
   )
 }

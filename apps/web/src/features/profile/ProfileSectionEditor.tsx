@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { clsx } from 'clsx'
 import { ChevronDown, ChevronUp, Edit, FileText, Plus, Save, Trash2 } from 'lucide-react'
 import { resumeClient } from '../../api/resumeClient'
 import { responseMessage } from '../../app/utils'
@@ -13,30 +12,30 @@ const sectionFields: Record<string, SectionField[]> = {
   experience: [
     { key: 'company', label: 'Empresa' },
     { key: 'role', label: 'Cargo' },
-    { key: 'period', label: 'Periodo' },
-    { key: 'description', label: 'Descricao', multiline: true },
+    { key: 'period', label: 'Período' },
+    { key: 'description', label: 'Descrição', multiline: true },
   ],
   projects: [
     { key: 'name', label: 'Projeto' },
     { key: 'role', label: 'Papel' },
     { key: 'technologies', label: 'Tecnologias' },
-    { key: 'description', label: 'Descricao', multiline: true },
+    { key: 'description', label: 'Descrição', multiline: true },
   ],
   education: [
-    { key: 'institution', label: 'Instituicao' },
+    { key: 'institution', label: 'Instituição' },
     { key: 'degree', label: 'Curso/Grau' },
     { key: 'year', label: 'Ano' },
   ],
   certifications: [
-    { key: 'name', label: 'Certificacao' },
+    { key: 'name', label: 'Certificação' },
     { key: 'issuer', label: 'Emissor' },
     { key: 'year', label: 'Ano' },
   ],
   languages: [
     { key: 'language', label: 'Idioma' },
-    { key: 'level', label: 'Nivel' },
+    { key: 'level', label: 'Nível' },
   ],
-  skills: [{ key: 'skills', label: 'Skills', multiline: true, placeholder: 'Separe por virgulas ou linhas' }],
+  skills: [{ key: 'skills', label: 'Habilidades', multiline: true, placeholder: 'Separe por vírgulas ou linhas' }],
   summary: [{ key: 'summary', label: 'Resumo', multiline: true }],
   identity: [
     { key: 'name', label: 'Nome' },
@@ -97,7 +96,7 @@ export function SectionEditorPanel({ versionId }: { versionId: string }) {
       const { data } = await resumeClient.listSections(versionId)
       setSections(data)
     } catch {
-      setError('Erro ao carregar secoes.')
+      setError('Não foi possível carregar as seções.')
     } finally {
       setLoading(false)
     }
@@ -128,20 +127,20 @@ export function SectionEditorPanel({ versionId }: { versionId: string }) {
       await loadSections()
       resetDraft()
     } catch (error: unknown) {
-      setError(responseMessage(error, 'Erro ao salvar secao.'))
+      setError(responseMessage(error, 'Não foi possível salvar a seção.'))
     } finally {
       setLoading(false)
     }
   }
 
   async function deleteSection(id: string) {
-    if (!confirm('Delete esta secao?')) return
+    if (!confirm('Excluir esta seção?')) return
     setLoading(true)
     try {
       await resumeClient.deleteSection(id)
       await loadSections()
     } catch {
-      setError('Erro ao excluir secao.')
+      setError('Não foi possível excluir a seção.')
     } finally {
       setLoading(false)
     }
@@ -158,7 +157,7 @@ export function SectionEditorPanel({ versionId }: { versionId: string }) {
     try {
       await resumeClient.reorderSections(versionId, ids)
     } catch {
-      setError('Erro ao reordenar.')
+      setError('Não foi possível reordenar as seções.')
       await loadSections()
     }
   }
@@ -192,80 +191,80 @@ export function SectionEditorPanel({ versionId }: { versionId: string }) {
   const allowsMultiple = !['summary', 'skills', 'raw_import', 'identity'].includes(draftType)
 
   return (
-    <div className="jp-section">
-      <div className="jp-section-header">
-        <FileText size={16} className="text-teal-700" />
-        <h2 className="flex-1 text-sm font-black text-slate-900">Editor de secoes</h2>
+    <div className="cv-importbox">
+      <div className="cv-sectionhead" style={{ alignItems: 'center' }}>
+        <span className="cv-sectionhead__icon"><FileText size={17} /></span>
+        <h3 className="cv-steptitle" style={{ fontSize: 15 }}>Editor de seções</h3>
       </div>
-      <div className="space-y-4 p-5">
-        {error && <div className="jp-alert jp-alert--red">{error}</div>}
-        <div className="space-y-2">
+      <div className="cv-form" style={{ marginTop: 14 }}>
+        {error && <div className="cv-alert cv-alert--red" role="alert">{error}</div>}
+        <div className="cv-list">
           {sections.map((section, index) => (
-            <div key={section.id} className="jp-card flex items-start gap-3 p-3">
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-black text-slate-900">{section.title}</div>
-                <div className="text-xs text-slate-500">{section.sectionType} · ordem {section.sortOrder}</div>
+            <div key={section.id} className="cv-listitem">
+              <div className="cv-listitem__body">
+                <div className="cv-listitem__title">{section.title}</div>
+                <div className="cv-listitem__meta">{section.sectionType} · ordem {section.sortOrder}</div>
               </div>
-              <div className="flex items-center gap-1">
-                <button className="grid size-8 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50" title="Mover para cima" onClick={() => void moveSection(index, -1)} disabled={index === 0 || loading}>
+              <div className="cv-row" style={{ gap: 2, flexWrap: 'nowrap' }}>
+                <button className="cv-iconbtn" title="Mover para cima" aria-label={`Mover ${section.title} para cima`} onClick={() => void moveSection(index, -1)} disabled={index === 0 || loading}>
                   <ChevronUp size={14} />
                 </button>
-                <button className="grid size-8 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50" title="Mover para baixo" onClick={() => void moveSection(index, 1)} disabled={index === sections.length - 1 || loading}>
+                <button className="cv-iconbtn" title="Mover para baixo" aria-label={`Mover ${section.title} para baixo`} onClick={() => void moveSection(index, 1)} disabled={index === sections.length - 1 || loading}>
                   <ChevronDown size={14} />
                 </button>
-                <button className="grid size-8 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" title="Editar" onClick={() => startEdit(section)}>
+                <button className="cv-iconbtn" title="Editar" aria-label={`Editar ${section.title}`} onClick={() => startEdit(section)}>
                   <Edit size={14} />
                 </button>
-                <button className="grid size-8 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-rose-600" title="Delete" onClick={() => void deleteSection(section.id)}>
+                <button className="cv-iconbtn" title="Excluir" aria-label={`Excluir ${section.title}`} onClick={() => void deleteSection(section.id)}>
                   <Trash2 size={14} />
                 </button>
               </div>
             </div>
           ))}
-          {sections.length === 0 && <span className="block text-center text-sm text-slate-500">Nenhuma seção nesta versão.</span>}
+          {sections.length === 0 && <p className="cv-hint" style={{ textAlign: 'center' }}>Nenhuma seção nesta versão.</p>}
         </div>
 
-        <div className="jp-card space-y-4 p-4">
-          <div className="text-sm font-black text-slate-900">{editingId ? 'Editar seção' : 'Nova seção'}</div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <FieldLabel>Tipo</FieldLabel>
-              <select className="jp-input" value={draftType} onChange={(event) => changeDraftType(event.target.value)} disabled={Boolean(editingId)}>
-                <option value="experience">Experiencia</option>
-                <option value="projects">Projetos</option>
-                <option value="education">Educacao</option>
-                <option value="certifications">Certificacoes</option>
-                <option value="languages">Idiomas</option>
-                <option value="skills">Skills</option>
-                <option value="summary">Resumo</option>
-                <option value="identity">Identidade/Contato</option>
-                <option value="raw_import">Importacao bruta</option>
-              </select>
-            </label>
-            <label className="block">
-              <FieldLabel>Titulo</FieldLabel>
-              <input className="jp-input" value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} placeholder="ex: Experiencia Profissional" />
-            </label>
-          </div>
-          <div className="space-y-3">
+        <div className="cv-card" style={{ boxShadow: 'none' }}>
+          <div className="cv-steptitle" style={{ fontSize: 14 }}>{editingId ? 'Editar seção' : 'Nova seção'}</div>
+          <div className="cv-form" style={{ marginTop: 12 }}>
+            <div className="cv-formrow">
+              <label className="block">
+                <FieldLabel>Tipo</FieldLabel>
+                <select className="cv-input cv-select" value={draftType} onChange={(event) => changeDraftType(event.target.value)} disabled={Boolean(editingId)}>
+                  <option value="experience">Experiência</option>
+                  <option value="projects">Projetos</option>
+                  <option value="education">Educação</option>
+                  <option value="certifications">Certificações</option>
+                  <option value="languages">Idiomas</option>
+                  <option value="skills">Habilidades</option>
+                  <option value="summary">Resumo</option>
+                  <option value="identity">Identidade e contato</option>
+                  <option value="raw_import">Importação bruta</option>
+                </select>
+              </label>
+              <label className="block">
+                <FieldLabel>Título</FieldLabel>
+                <input className="cv-input" value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} placeholder="ex: Experiência profissional" />
+              </label>
+            </div>
             {draftItems.map((item, index) => (
-              <div key={index} className="jp-card space-y-3 p-3">
+              <div key={index} className="cv-importbox">
                 {allowsMultiple && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-slate-700">Item {index + 1}</span>
-                    <button className="grid size-8 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-rose-600 disabled:opacity-50" title="Remover item" onClick={() => removeItem(index)} disabled={draftItems.length <= 1}>
+                  <div className="cv-row cv-row--between" style={{ marginBottom: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 800 }}>Item {index + 1}</span>
+                    <button className="cv-iconbtn" title="Remover item" aria-label={`Remover item ${index + 1}`} onClick={() => removeItem(index)} disabled={draftItems.length <= 1}>
                       <Trash2 size={14} />
                     </button>
                   </div>
                 )}
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="cv-formrow">
                   {fields.map((field) => (
-                    <div className={clsx(field.multiline && 'sm:col-span-2')} key={field.key}>
+                    <div key={field.key} style={field.multiline ? { gridColumn: '1 / -1' } : undefined}>
                       <FieldLabel>{field.label}</FieldLabel>
                       {field.multiline ? (
-                        <textarea className="jp-input" value={item[field.key] ?? ''} onChange={(event) => updateItem(index, field.key, event.target.value)} rows={3} placeholder={field.placeholder} />
+                        <textarea className="cv-textarea cv-textarea--short" value={item[field.key] ?? ''} onChange={(event) => updateItem(index, field.key, event.target.value)} rows={3} placeholder={field.placeholder} />
                       ) : (
-                        <input className="jp-input" value={item[field.key] ?? ''} onChange={(event) => updateItem(index, field.key, event.target.value)} placeholder={field.placeholder} />
+                        <input className="cv-input" value={item[field.key] ?? ''} onChange={(event) => updateItem(index, field.key, event.target.value)} placeholder={field.placeholder} />
                       )}
                     </div>
                   ))}
@@ -273,21 +272,22 @@ export function SectionEditorPanel({ versionId }: { versionId: string }) {
               </div>
             ))}
             {allowsMultiple && (
-              <button className="jp-btn jp-btn--secondary h-9 px-3 text-xs" onClick={addItem} type="button">
-                <Plus size={14} /> Adicionar item
-              </button>
+              <div>
+                <button className="cv-btn cv-btn--secondary cv-btn--small" onClick={addItem} type="button">
+                  <Plus size={14} /> Adicionar item
+                </button>
+              </div>
             )}
-            <div className="text-xs text-slate-400">Os campos sao salvos como JSON estruturado no backend.</div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button className="jp-btn jp-btn--primary h-10 px-4 disabled:opacity-50" onClick={() => void saveSection()} disabled={loading || !draftTitle.trim()}>
-              <Save size={14} /> {editingId ? 'Save alteracoes' : 'Adicionar'}
-            </button>
-            {editingId && (
-              <button className="jp-btn jp-btn--secondary h-10 px-3 text-xs" onClick={resetDraft}>
-                Cancelar
+            <div className="cv-row">
+              <button className="cv-btn cv-btn--primary cv-btn--small" onClick={() => void saveSection()} disabled={loading || !draftTitle.trim()}>
+                <Save size={14} /> {editingId ? 'Salvar alterações' : 'Adicionar'}
               </button>
-            )}
+              {editingId && (
+                <button className="cv-btn cv-btn--secondary cv-btn--small" onClick={resetDraft}>
+                  Cancelar
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

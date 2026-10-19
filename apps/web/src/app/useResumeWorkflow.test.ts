@@ -10,7 +10,7 @@ import { useResumeWorkflow } from './useResumeWorkflow'
 
 const version: ResumeVersionDetail = {
   id: 'tailored-version', resumeDocumentId: 'document', title: 'Adaptado', status: 'draft',
-  targetRole: 'Engenheira', targetCompany: 'Empresa', atsScore: 75, updatedAt: '2026-10-01T12:00:00Z',
+  targetRole: 'Engenheira', targetCompany: 'Empresa', atsScore: 75, updatedAt: '2026-10-01T12:00:00Z', kind: 'tailored',
   plainText: 'Resumo original\nExperiência preservada', sections: [
     { id: 'summary', sectionType: 'summary', title: 'Resumo', sortOrder: 0, contentJson: '{"text":"Resumo original"}' },
     { id: 'experience', sectionType: 'experience', title: 'Experiência', sortOrder: 1, contentJson: '{"text":"Experiência preservada"}' },
@@ -37,10 +37,10 @@ function makeState(overrides: Partial<ResumeWorkflowState> = {}) {
     profile: emptyProfile, selectedResumeFile: null, selectedResumeVersionId: 'base-version',
     resumeDocuments: [{ id: 'document', title: 'Importado', status: 'ready', sourceFileName: 'cv.pdf',
       sourceKind: 'pdf', updatedAt: version.updatedAt,
-      versions: [{ ...version, id: 'base-version', title: 'Base importada' }] }],
+      versions: [{ ...version, id: 'base-version', title: 'Base importada', kind: 'base' }] }],
     atsJobDescription: '', atsJobUrl: '', atsScreenshotFile: null, atsTailoredResume: structuredClone(draft),
     atsJobTarget: null, atsUseAi: false, selectedLayout: 'ats_standard', reviewAnswers: {},
-    setRecommendedSkillAdditions: vi.fn(), setProfile: vi.fn(), setProfileImportBusy: vi.fn(),
+    setProfile: vi.fn(), setProfileImportBusy: vi.fn(),
     setProfileImportResult: vi.fn(), setProfileImportNotice: vi.fn(), setSelectedResumeFile: vi.fn(),
     setAtsResumeBusy: vi.fn(), setAtsJobTarget: vi.fn(), setAtsScreenshotFile: vi.fn(), setAtsExportBusy: vi.fn(),
     setAtsResumeNotice: vi.fn(), refresh: vi.fn().mockResolvedValue(undefined),
@@ -142,7 +142,7 @@ describe('selected base version', () => {
     const state = makeState({ selectedResumeVersionId, atsJobDescription: 'Vaga SQL' })
     state.resumeDocuments.push({ ...state.resumeDocuments[0], id: 'other-document', versions: [
       { ...version, id: 'older-selected', title: 'Versão escolhida', updatedAt: '2026-09-01T12:00:00Z' },
-      { ...version, id: 'newest-import', title: 'Base importada recente', updatedAt: '2026-10-04T12:00:00Z' },
+      { ...version, id: 'newest-import', title: 'Base importada recente', updatedAt: '2026-10-04T12:00:00Z', kind: 'base' },
       { ...version, id: 'newest-tailored', title: 'Adaptado', updatedAt: '2026-10-05T12:00:00Z' },
     ] })
     return state
@@ -165,7 +165,7 @@ describe('selected base version', () => {
 
   it('falls back to the newest version when no imported bases exist', async () => {
     const state = stateWithVersions('missing')
-    state.resumeDocuments.forEach((document) => { document.versions = document.versions.map((item) => ({ ...item, title: 'Adaptado' })) })
+    state.resumeDocuments.forEach((document) => { document.versions = document.versions.map((item) => ({ ...item, title: 'Adaptado', kind: 'tailored' as const })) })
     await useResumeWorkflow(state).buildBaseResume()
     expect(requests.at(-1)?.body).toMatchObject({ baseResumeVersionId: 'newest-tailored' })
   })

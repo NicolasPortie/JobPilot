@@ -1,25 +1,23 @@
-import type { ComponentType } from 'react'
+import type { ComponentType, ReactNode } from 'react'
 
 type EmptyStateProps = {
   icon?: ComponentType<{ size?: number; strokeWidth?: number; className?: string }>
   title: string
   description?: string
-  action?: React.ReactNode
+  action?: ReactNode
 }
 
 export function EmptyState({ icon: Icon, title, description, action }: EmptyStateProps) {
   return (
-    <div className="jp-empty-state">
-      <div>
-        {Icon && (
-          <div className="jp-empty-state__icon">
-            <Icon size={32} strokeWidth={1.4} />
-          </div>
-        )}
-        <h3 className="jp-empty-state__title">{title}</h3>
-        {description && <p className="jp-empty-state__desc">{description}</p>}
-        {action && <div className="mt-4">{action}</div>}
-      </div>
+    <div className="cv-empty">
+      {Icon && (
+        <span className="cv-empty__icon" aria-hidden>
+          <Icon size={22} strokeWidth={1.8} />
+        </span>
+      )}
+      <h3 className="cv-empty__title">{title}</h3>
+      {description && <p className="cv-empty__text">{description}</p>}
+      {action && <div style={{ marginTop: 8 }}>{action}</div>}
     </div>
   )
 }

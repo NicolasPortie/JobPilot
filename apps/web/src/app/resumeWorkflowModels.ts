@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { AtsProfileSkillAddition, JobTargetDetail, Profile, QuickTailorItem, ResumeDocumentSummary, ResumeImportResult, TailoredResume } from '../types'
+import type { JobTargetDetail, Profile, QuickTailorItem, ResumeDocumentSummary, ResumeImportResult, TailoredResume } from '../types'
 
 export type ReviewAnswers = Record<string, { id?: string; value: string; type: string; evidence: string }>
 
@@ -16,7 +16,6 @@ export type ResumeWorkflowState = {
   atsUseAi: boolean
   selectedLayout: string
   reviewAnswers: ReviewAnswers
-  setRecommendedSkillAdditions: Dispatch<SetStateAction<AtsProfileSkillAddition[]>>
   setProfile: Dispatch<SetStateAction<Profile>>
   setProfileImportBusy: Dispatch<SetStateAction<boolean>>
   setProfileImportResult: Dispatch<SetStateAction<ResumeImportResult | null>>

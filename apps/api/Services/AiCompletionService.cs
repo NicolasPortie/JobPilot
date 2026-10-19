@@ -327,8 +327,9 @@ public sealed partial class AiCompletionService(HttpClient http, IConfiguration 
         return Math.Round((inputTokens / 1_000_000m * inputPerMillion.Value) + (outputTokens / 1_000_000m * outputPerMillion.Value), 6);
     }
 
-    private sealed record ChatCompletionRequest([property: JsonPropertyName("model")] string Model, [property: JsonPropertyName("messages")] ChatMessage[] Messages, [property: JsonPropertyName("max_completion_tokens")] int MaxCompletionTokens);
-    private sealed record StructuredChatCompletionRequest([property: JsonPropertyName("model")] string Model, [property: JsonPropertyName("messages")] ChatMessage[] Messages, [property: JsonPropertyName("max_completion_tokens")] int MaxCompletionTokens, [property: JsonPropertyName("response_format")] ChatResponseFormat ResponseFormat);
+    // stream=false explícito: gateways como o OmniRoute respondem em SSE quando o campo é omitido.
+    private sealed record ChatCompletionRequest([property: JsonPropertyName("model")] string Model, [property: JsonPropertyName("messages")] ChatMessage[] Messages, [property: JsonPropertyName("max_completion_tokens")] int MaxCompletionTokens, [property: JsonPropertyName("stream")] bool Stream = false);
+    private sealed record StructuredChatCompletionRequest([property: JsonPropertyName("model")] string Model, [property: JsonPropertyName("messages")] ChatMessage[] Messages, [property: JsonPropertyName("max_completion_tokens")] int MaxCompletionTokens, [property: JsonPropertyName("response_format")] ChatResponseFormat ResponseFormat, [property: JsonPropertyName("stream")] bool Stream = false);
     private sealed record ChatResponseFormat([property: JsonPropertyName("type")] string Type, [property: JsonPropertyName("json_schema")] ChatJsonSchema JsonSchema);
     private sealed record ChatJsonSchema([property: JsonPropertyName("name")] string Name, [property: JsonPropertyName("strict")] bool Strict, [property: JsonPropertyName("schema")] object Schema);
     private sealed record ChatMessage([property: JsonPropertyName("role")] string Role, [property: JsonPropertyName("content")] string Content);

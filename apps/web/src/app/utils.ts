@@ -52,3 +52,10 @@ export function isUnauthorizedResponse(error: unknown) {
   const response = (error as { response?: { status?: number } }).response
   return response?.status === 401
 }
+
+/** Iniciais do primeiro e do último nome, para o avatar. */
+export function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return ''
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
